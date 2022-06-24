@@ -65,6 +65,10 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
     Export('env', 'CART_VERSION')
 
+    # DAOS-10372 FIXME to remove for debuggin purpose
+    env.AppendUnique(LINKFLAGS=['-rdynamic'])
+    env.AppendUnique(CCFLAGS=['-rdynamic'])
+
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
     Default('gurt')

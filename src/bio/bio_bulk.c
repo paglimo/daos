@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -520,8 +520,10 @@ bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 
 	rc = bulk_grp_grow(bdb, bbg, arg);
 	if (rc) {
-		D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
-			pg_cnt, DP_RC(rc));
+		char* stack_trace = d_dump_stack();
+		D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC" %s\n",
+			pg_cnt, DP_RC(rc), stack_trace);
+		free(stack_trace);
 		dump_dma_info(bdb);
 
 		if (rc == -DER_AGAIN)

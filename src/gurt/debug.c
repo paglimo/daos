@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+// TODO DAOS-10372 Debug function to remove
+#include <execinfo.h>
+#include <string.h>
+#include <assert.h>
+// TODO DAOS-10372 Debug function to remove
 
 #include <gurt/common.h>
 
@@ -624,4 +629,70 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		return 0;
 	}
 	return -DER_INVAL;
+}
+
+// TODO DAOS-10372 Debug function to remove
+#define FRAMES_MAX 64
+char *d_dump_stack(void)
+{
+        void* call_stack[FRAMES_MAX];
+        char** symbols;
+        char* stack_trace = NULL;
+	const char stack_trace_prefix[] = "{\"stack_trace\":[";
+	const char stack_trace_suffix[] = "]}";
+	const char frame_wrapper_prefix[] = "\"";
+	const char frame_wrapper_suffix[] = "\",";
+        size_t stack_trace_size;
+        const size_t stack_trace_prefix_size = sizeof(stack_trace_prefix) - 1;
+        const size_t stack_trace_sufix_size = sizeof(stack_trace_suffix);
+        const size_t frame_wrapper_prefix_size = sizeof(frame_wrapper_prefix) - 1;
+        const size_t frame_wrapper_sufix_size = sizeof(frame_wrapper_suffix) - 1;
+        unsigned int index;
+	int frames_nb;
+	char* it;
+	int nchar;
+
+        frames_nb = backtrace(call_stack, FRAMES_MAX);
+	assert(frames_nb >= 2 && frames_nb <= FRAMES_MAX);
+        symbols = backtrace_symbols(call_stack, frames_nb);
+        if (symbols == NULL) {
+                goto error;
+        }
+
+	// We remove 1 character as we will reuse the last frame separator char ','
+        stack_trace_size = stack_trace_prefix_size + stack_trace_sufix_size - 1;
+        for (index = 1; index < frames_nb; ++index) {
+                stack_trace_size += frame_wrapper_prefix_size;
+                stack_trace_size += strlen(symbols[index]);
+                stack_trace_size += frame_wrapper_sufix_size;
+        }
+
+        stack_trace = malloc(stack_trace_size);
+        if (stack_trace == NULL) {
+                goto error;
+        }
+	it = stack_trace;
+	memcpy(it, stack_trace_prefix, stack_trace_prefix_size);
+	it += stack_trace_prefix_size;
+	*it = '\0';
+        for (index = 1; index < frames_nb; ++index) {
+                nchar = sprintf(it, "%s%s%s",
+				frame_wrapper_prefix, symbols[index], frame_wrapper_suffix);
+                if (nchar < 0) {
+                        goto error;
+                }
+                it += nchar;
+                assert((it - stack_trace) < stack_trace_size);
+        }
+        assert((it - 1 - stack_trace) == stack_trace_size - stack_trace_sufix_size);
+	// overwrite the last frame separator char ','
+	memcpy(it - 1, stack_trace_suffix, stack_trace_sufix_size);
+
+        free(symbols);
+        return stack_trace;
+
+error:
+        free(stack_trace);
+        free(symbols);
+        return NULL;
 }

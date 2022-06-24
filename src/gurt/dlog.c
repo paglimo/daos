@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -511,7 +511,7 @@ d_log_sync(void)
  */
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
-#define DLOG_TBSIZ    1024	/* bigger than any line should be */
+#define DLOG_TBSIZ    0x8000	/* bigger than any line should be */
 	static __thread char b[DLOG_TBSIZ];
 	static __thread uint32_t tid = -1;
 	static __thread uint32_t pid = -1;

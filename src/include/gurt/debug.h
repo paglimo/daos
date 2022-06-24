@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -274,6 +274,10 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  */
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 					     const char*, const int));
+
+// TODO DAOS-10372 Debug function to remove
+char *d_dump_stack(void);
+// TODO DAOS-10372 Debug function to remove
 
 /**
  * D_PRINT can be used for output to stdout with or without clog being enabled
