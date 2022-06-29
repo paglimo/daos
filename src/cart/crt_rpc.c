@@ -1369,6 +1369,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
+#if 0
 	// FIXME DAOS-10372 Trace to remove
 	/* static int rate_limiter = 0; */
 	/* if (rate_limiter <= 0 && req->cr_opc == 0x4080000) { */
@@ -1383,6 +1384,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			stack_trace);
 		free(stack_trace);
 	}
+#endif
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	/* Take a reference to ensure rpc_priv is valid for duration of this
@@ -1413,6 +1415,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
+#if 0
 	// FIXME DAOS-10372 Trace to remove
 	if (req->cr_opc == 0x4080000) {
 		D_ERROR("RPC DAOS_OBJ_RPC_UPDATE submitted: opc=%#x rpcid=%#lx rank:tag=%d:%d\n",
@@ -1421,6 +1424,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			rpc_priv->crp_pub.cr_ep.ep_rank,
 			rpc_priv->crp_pub.cr_ep.ep_tag);
 	}
+#endif
 	RPC_TRACE(DB_TRACE, rpc_priv, "submitted.\n");
 
 	rc = crt_context_req_track(rpc_priv);

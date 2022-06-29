@@ -49,10 +49,12 @@ dma_alloc_chunk(unsigned int cnt)
 	}
 
 	if (chunk->bdc_ptr == NULL) {
+#if 0
 		char* stack_trace = d_dump_stack();
 		D_ERROR("Failed to allocate %u pages DMA buffer %s\n", cnt, stack_trace);
 		D_FREE(chunk);
 		free(stack_trace);
+#endif
 
 		return NULL;
 	}
