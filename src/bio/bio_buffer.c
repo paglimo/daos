@@ -49,11 +49,15 @@ dma_alloc_chunk(unsigned int cnt)
 	}
 
 	if (chunk->bdc_ptr == NULL) {
+		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
+		D_FREE(chunk);
 #if 0
+		// FIXME DAOS-10372 Trace to remove
 		char* stack_trace = d_dump_stack();
 		D_ERROR("Failed to allocate %u pages DMA buffer %s\n", cnt, stack_trace);
 		D_FREE(chunk);
 		free(stack_trace);
+		D_EMIT("Failed to allocate %u pages DMA buffer\n", cnt);
 #endif
 
 		return NULL;
@@ -734,8 +738,6 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 * be high contention over the SPDK huge page cache.
 	 */
 	if (pg_cnt > bio_chk_sz) {
-		// TODO DAOS-10372 Add some logs to check if we are often passing in this part of
-		// the code
 		chk = dma_alloc_chunk(pg_cnt);
 		if (chk == NULL)
 			return -DER_NOMEM;
@@ -749,7 +751,6 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);
 		chk_pg_idx = 0;
 
-		// TODO DAOS-10372 Could be usefull to activate this log
 		D_DEBUG(DB_IO, "Huge chunk:%p[%p], cnt:%u, off:%u\n",
 			chk, chk->bdc_ptr, pg_cnt, pg_off);
 
@@ -1127,6 +1128,11 @@ retry:
 
 		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n",
 			biod, retry_cnt++);
+		// FIXME DAOS-10372 Trace to remove
+		if (retry_cnt > 800)  {
+			D_ERROR("IOD %p waits for active IODs. %d\n",
+				biod, retry_cnt);
+		}
 
 		ABT_mutex_lock(bdb->bdb_mutex);
 		ABT_cond_wait(bdb->bdb_wait_iods, bdb->bdb_mutex);
@@ -1134,6 +1140,11 @@ retry:
 
 		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",
 			biod, retry_cnt);
+		// FIXME DAOS-10372 Trace to remove
+		if (retry_cnt > 800)  {
+			D_ERROR("IOD %p finished waiting. %d\n",
+				biod, retry_cnt);
+		}
 
 		goto retry;
 	}

@@ -567,7 +567,9 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 	struct bio_bulk_group	*bbg;
 	int			 i, bulk_grps = 0, bulk_chunks = 0;
 
-	D_WARN("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
+	// FIXME DAOS-10372 Trace to remove
+	// D_WARN("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
+	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
 		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max,
 		bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
@@ -583,14 +585,21 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 		bulk_grps++;
 		bulk_chunks += bbg->bbg_chk_cnt;
 
-		D_WARN("bulk_grp %d: bulk_size:%u, chunks:%u\n",
+		// FIXME DAOS-10372 Trace to remove
+		// D_WARN("bulk_grp %d: bulk_size:%u, chunks:%u\n",
+		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u\n",
 			i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
 	}
-	D_WARN("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
+	// FIXME DAOS-10372 Trace to remove
+	// D_WARN("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
+	D_EMIT("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
 
+#if 0
+	// FIXME DAOS-10372 Trace to remove
 	char* stack_trace = d_dump_stack();
 	D_ERROR("DMA buffer dump called: %s\n", stack_trace);
 	free(stack_trace);
+#endif
 }
 
 /* bio_monitor.c */
