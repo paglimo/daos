@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,8 @@
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
+
+#define D_TM_MAX_STR_METRIC_LEN		127
 
 /**
  * The following definitions are suggested strings for units that may be used
@@ -139,6 +141,7 @@ enum {
 	D_TM_CLOCK_PROCESS_CPUTIME	= 0x100,
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x200,
 	D_TM_LINK			= 0x400,
+	D_TM_STRING			= 0x800,
 	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
 					   D_TM_COUNTER | \
 					   D_TM_TIMESTAMP | \
@@ -146,7 +149,8 @@ enum {
 					   D_TM_DURATION | \
 					   D_TM_GAUGE | \
 					   D_TM_STATS_GAUGE | \
-					   D_TM_LINK)
+					   D_TM_LINK | \
+					   D_TM_STRING)
 };
 
 enum {
@@ -201,6 +205,7 @@ struct d_tm_metric_t {
 	union data {
 		uint64_t	value;
 		struct		timespec tms[2];
+		char		*str;
 	}			dtm_data;
 	struct d_tm_stats_t	*dtm_stats;
 	struct d_tm_histogram_t	*dtm_histogram;

@@ -7,12 +7,15 @@
  * This file tests the telemetry API in GURT.
  */
 
+#define D_LOGFAC	DD_FAC(telem)
+
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <gurt/common.h>
 #include <daos/tests_lib.h>
 #include "wrap_cmocka.h"
 #include "gurt/telemetry_common.h"
@@ -620,6 +623,38 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	check_histogram_m2_data(path);
 	check_histogram_m2_stats(path);
 	check_histogram_metadata(path);
+}
+
+static void
+test_string_metric(void **state)
+{
+	struct d_tm_node_t	*node;
+	int			rc;
+	char			*path = "gurt/tests/telem/str";
+	char			*val = NULL;
+
+	rc = d_tm_add_metric(&node, D_TM_STRING, NULL, NULL, path);
+	assert_rc_equal(rc, 0);
+
+	/* unset */
+	rc = d_tm_get_string(cli_ctx, &val, srv_to_cli_node(node));
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(val, "(null)");
+	D_FREE(val);
+
+	/* set and fetch */
+	d_tm_set_string(node, "my string");
+	rc = d_tm_get_string(cli_ctx, &val, srv_to_cli_node(node));
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(val, "my string");
+	D_FREE(val);
+
+	/* not possible to change value after first setting it */
+	d_tm_set_string(node, "something else");
+	rc = d_tm_get_string(cli_ctx, &val, srv_to_cli_node(node));
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(val, "my string");
+	D_FREE(val);
 }
 
 static void
@@ -1236,7 +1271,7 @@ test_print_metrics(void **state)
 	assert_non_null(node);
 
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
-		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
+		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY | D_TM_STRING);
 
 	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
 			       D_TM_INCLUDE_METADATA, stdout);
@@ -1313,6 +1348,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_duration_stats),
 		cmocka_unit_test(test_gauge_with_histogram_multiplier_1),
 		cmocka_unit_test(test_gauge_with_histogram_multiplier_2),
+		cmocka_unit_test(test_string_metric),
 		cmocka_unit_test(test_units),
 		cmocka_unit_test(test_ephemeral_simple),
 		cmocka_unit_test(test_ephemeral_nested),

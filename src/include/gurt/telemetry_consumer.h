@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +28,7 @@ int d_tm_get_num_buckets(struct d_tm_context *ctx,
 int d_tm_get_bucket_range(struct d_tm_context *ctx,
 			  struct d_tm_bucket_t *bucket, int bucket_id,
 			  struct d_tm_node_t *node);
+int d_tm_get_string(struct d_tm_context *ctx, char **val, struct d_tm_node_t *node);
 
 /* Developer facing client API to discover topology and manage results */
 struct d_tm_context *d_tm_open(int id);

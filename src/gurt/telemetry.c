@@ -1069,6 +1069,34 @@ d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
 		d_tm_print_stats(stream, stats, format);
 }
 
+
+/**
+ * Prints the string \a val with \a name to the \a stream provided
+ *
+ * \param[in]	val		String value
+ * \param[in]	name		Timer name
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ *				metric type.
+ * \param[in]	stream		Output stream (stdout, stderr)
+ */
+void
+d_tm_print_string(char *val, char *name, int format, int opt_fields, FILE *stream)
+{
+	if (format == D_TM_CSV) {
+		fprintf(stream, "%s", name);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, ",string");
+		fprintf(stream, ",%s", val);
+	} else {
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, "type: string, ");
+		fprintf(stream, "%s: %s", name, val);
+	}
+}
+
 /**
  * Client function to print the metadata strings \a desc and \a units
  * to the \a stream provided
@@ -1126,6 +1154,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	struct d_tm_stats_t stats = {0};
 	struct timespec     tms;
 	uint64_t            val;
+	char		   *strval = NULL;
 	time_t              clk;
 	char                time_buff[D_TM_TIME_BUFF_LEN];
 	char               *timestamp      = NULL;
@@ -1238,6 +1267,15 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 				 stream);
 		if (stats.sample_size > 0)
 			stats_printed = true;
+		break;
+	case D_TM_STRING:
+		rc = d_tm_get_string(ctx, &strval, node);
+		if (rc != DER_SUCCESS) {
+			fprintf(stream, "Error on string read: %d\n", rc);
+			break;
+		}
+		d_tm_print_string(strval, name, format, opt_fields, stream);
+		D_FREE(strval);
 		break;
 	default:
 		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
@@ -1777,6 +1815,64 @@ d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
 		d_tm_compute_histogram(metric, value);
 	}
+	d_tm_node_unlock(metric);
+}
+
+/**
+ * Allocates an arbitrary string as a metric value in the telemetry shared memory.
+ *
+ * @note At this time, the string value cannot be deallocated and have its shared memory reused.
+ *	 Consequently this can be done exactly once per string metric.
+ * @note The length limit is arbitrary.
+ *
+ * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		str	String value for the metric
+ */
+void
+d_tm_set_string(struct d_tm_node_t *metric, const char *str)
+{
+	struct d_tm_shmem_hdr 	*shmem;
+	int			 len;
+
+	if (metric == NULL || str == NULL)
+		return;
+
+	if (metric->dtn_type != D_TM_STRING) {
+		D_ERROR("Failed to set string [%s] on item "
+			"not a string.  Operation mismatch: " DF_RC "\n",
+			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		return;
+	}
+
+	d_tm_node_lock(metric);
+	if (metric->dtn_metric->dtm_data.str != NULL) {
+		D_ERROR("Cannot change string metric [%s] with current value=\"%s\"\n",
+			metric->dtn_name, metric->dtn_metric->dtm_data.str);
+		goto unlock;
+	}
+
+	shmem = get_shmem_for_key(tm_shmem.ctx, metric->dtn_shmem_key);
+	if (shmem == NULL) {
+		D_ERROR("Cannot set string metric [%s]: can't find shmem region\n",
+			metric->dtn_name);
+		goto unlock;
+	}
+
+	len = strnlen(str, D_TM_MAX_STR_METRIC_LEN + 1);
+	if (len > D_TM_MAX_STR_METRIC_LEN) {
+		D_WARN("New value for [%s] is too long, will be truncated\n", metric->dtn_name);
+		len = D_TM_MAX_STR_METRIC_LEN;
+	}
+	metric->dtn_metric->dtm_data.str = shmalloc(shmem, len + 1);
+	if (metric->dtn_metric->dtm_data.str == NULL) {
+		D_ERROR("Cannot set string metric [%s]: out of shmem\n", metric->dtn_name);
+		goto unlock;
+	}
+
+	strncpy(metric->dtn_metric->dtm_data.str, str, len);
+	metric->dtn_metric->dtm_data.str[len + 1] = '\0';
+
+unlock:
 	d_tm_node_unlock(metric);
 }
 
@@ -3075,6 +3171,55 @@ int d_tm_get_metadata(struct d_tm_context *ctx, char **desc, char **units,
 		return -DER_METRIC_NOT_FOUND;
 	}
 	return DER_SUCCESS;
+}
+
+/**
+ * Read the specified string.
+ *
+ * \param[in]	ctx	The context, indicate whether it is for client
+ *			side use case (non-NULL) or server side (NULL).
+ * \param[out]	val	Will be allocated with a copy of the string value.
+ *			Caller is responsible for freeing.
+ * \param[in]	node	Pointer to the stored metric node
+ *
+ * \return	DER_SUCCESS		Success
+ *		-DER_INVAL		Invalid input
+ *		-DER_METRIC_NOT_FOUND	Metric not found
+ *		-DER_OP_NOT_PERMITTED	Metric was not a string
+ */
+int
+d_tm_get_string(struct d_tm_context *ctx, char **val, struct d_tm_node_t *node)
+{
+	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_shmem_hdr	*shmem = NULL;
+	char			*str;
+	int			 rc = 0;
+
+	if (val == NULL || node == NULL || node->dtn_metric == NULL)
+		return -DER_INVAL;
+
+	if (node->dtn_type != D_TM_STRING)
+		return -DER_OP_NOT_PERMITTED;
+
+	if (ctx == NULL) {
+		metric_data = node->dtn_metric;
+	} else {
+		rc = validate_node_ptr(ctx, node, &shmem);
+		if (rc != 0)
+			return rc;
+
+		metric_data = conv_ptr(shmem, node->dtn_metric);
+		if (metric_data == NULL)
+			return -DER_METRIC_NOT_FOUND;
+	}
+
+	d_tm_node_lock(node);
+	str = (metric_data->dtm_data.str != NULL) ? metric_data->dtm_data.str : "(null)";
+	D_STRNDUP(*val, str, D_TM_MAX_STR_METRIC_LEN + 1);
+	if (*val == NULL)
+		rc = -DER_NOMEM;
+	d_tm_node_unlock(node);
+	return rc;
 }
 
 /**

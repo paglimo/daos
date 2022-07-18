@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@ void d_tm_mark_duration_end(struct d_tm_node_t *metric);
 void d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value);
 void d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value);
 void d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value);
+void d_tm_set_string(struct d_tm_node_t *metric, const char *str);
 
 /* Other server functions */
 int d_tm_init(int id, uint64_t mem_size, int flags);
