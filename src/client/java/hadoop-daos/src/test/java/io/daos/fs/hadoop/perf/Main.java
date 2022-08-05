@@ -216,6 +216,7 @@ public class Main {
         list.add("-DwriteSize=" + writeSize);
         list.add("-Dpid=" + System.getProperty("pid"));
         list.add("-Duid=" + System.getProperty("uid"));
+        list.add("-Duri=" + System.getProperty("uri"));
         list.add("-Dthreads=" + jvmThreads);
         list.add("-DfileSize=" + fileSize);
         list.add("-Dseq=" + i);
@@ -385,7 +386,9 @@ public class Main {
         list.add("-DreadSize=" + readSize);
         list.add("-Dpid=" + System.getProperty("pid"));
         list.add("-Duid=" + System.getProperty("uid"));
+        list.add("-Duri=" + System.getProperty("uri"));
         list.add("-Dthreads=" + jvmThreads);
+        list.add("-DfileSize=" + fileSize);
         list.add("-Dseq=" + i);
         list.add("-Drandom=" + (random ? "true" : "false"));
         list.add("-Dapi=" + api);
