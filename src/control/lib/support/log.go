@@ -172,11 +172,13 @@ func CollectDaosLog(dst string) error {
 
 	// Copy DAOS server engine log files
 	for i := range serverConfig.Engines {
-		// fmt.Printf(" -- SAMIR -- server log_file[%d] ->  %s \n", i, serverConfig.Engines[i].LogFile)
-		err := cpFile(serverConfig.Engines[i].LogFile, targetLocation)
-
-		if err != nil {
-			return err
+		// Find the matching file incase of log file is based on PID or it has backup
+		matches, _ := filepath.Glob(serverConfig.Engines[i].LogFile + "*")
+		for _, logfile := range matches {
+			err := cpFile(logfile, targetLocation)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

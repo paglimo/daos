@@ -25,9 +25,10 @@ var DmgLogCollectCmd = [...] string {
 	"dmg storage scan -n",
 	"dmg storage scan -m",
 	"dmg storage query list-pools -v",
-	//"dmg storage query list-devices",
-	//"dmg storage query device-health",
-	//"dmg storage query target-health"
+    "dmg storage query list-devices",
+    //"dmg storage query device-health", To be done for each servers for each Disk ID
+    //"dmg storage query target-health" To be done for each servers for each rank and target
+    //"dmg telemetry metrics query", To be done for each servers using -l in the list
 }
 
 type (
