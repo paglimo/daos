@@ -28,7 +28,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		cmd.TargetFolder = "/tmp/daos_support_logs"
 	}
 
-	err := support.CollectDaosLog(cmd.TargetFolder)
+	err := support.CollectServerLog(cmd.TargetFolder)
 	if err != nil {
 		return err
 	}

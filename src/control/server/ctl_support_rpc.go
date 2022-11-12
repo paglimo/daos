@@ -20,7 +20,7 @@ import (
 func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogReq) (*ctlpb.CollectLogResp, error) {
 	c.log.Infof("CollectLogResp: LogFolder location is %s", req.Loglocation)
 	
-	err := support.CollectDaosLog(req.Loglocation)
+	err := support.CollectServerLog(req.Loglocation)
 	if err != nil {
 		return nil, err
 	}

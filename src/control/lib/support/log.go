@@ -1,18 +1,23 @@
 package support
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"os/exec"
 	"strings"
 	"io"
+	"io/ioutil"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 func getRunningConf() (string, bool) {
@@ -153,7 +158,7 @@ func Collectdmglog(dst string, configPath string) error {
 	return nil
 }
 
-func CollectDaosLog(dst string) error {
+func CollectServerLog(dst string) error {
 	targetLocation, err := createLogfolder(dst)
 	if err != nil {
 		return err
@@ -189,11 +194,43 @@ func CollectDaosLog(dst string) error {
 	}
 
 	// Copy DAOS Helper log file
-	// fmt.Printf(" -- SAMIR -- helper_log_file ->  %s \n", serverConfig.HelperLogFile)
 	err = cpFile(serverConfig.HelperLogFile, targetLocation)
 	if err != nil {
 		return err
 	}
 
+	// Copy daos_metrics log
+	for i := range serverConfig.Engines {
+		engineId := fmt.Sprintf("%d", i)
+		cmd := strings.Join([]string{"daos_metrics", "-S",  engineId}, " ")
+
+		// executing as subshell enables pipes in cmd string
+		out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+		if err != nil {
+			err = errors.Wrapf(
+				err, "Error running daos_metrics -S %d : %s", i, out)
+		}
+
+		engineIdLog := fmt.Sprintf("daos_metrics_srv_id_%d.txt", i)
+		if err := ioutil.WriteFile(filepath.Join(targetLocation, engineIdLog), out, 0644); err != nil {
+			return errors.Wrapf(err, "failed to write %s", filepath.Join(targetLocation, engineIdLog))
+		}
+	}
+
+	// Collect dump-topology output
+	log := logging.NewCommandLineLogger()
+	hwProv := hwprov.DefaultTopologyProvider(log)
+	topo, err := hwProv.GetTopology(context.Background())
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(filepath.Join(targetLocation, "dmg_dump-topology.txt"))
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+	hardware.PrintTopology(topo, f)
+
 	return nil
+
 }
