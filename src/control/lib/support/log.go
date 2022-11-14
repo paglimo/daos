@@ -120,12 +120,23 @@ func createLogfolder(target string) (string,  error) {
 	return targetLocation, nil
 }
 
-func Collectdmglog(dst string, configPath string) error {
-	_, err := createLogfolder(dst)
+func cpOutputToFile(cmd string, target string) error {
+	// Run command and copy output to the file
+	// executing as subshell enables pipes in cmd string
+	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
-		return err
+		err = errors.Wrapf(
+			err, "Error running command %s with %s", cmd, out)
 	}
 
+	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
+		return errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
+	}
+
+	return nil
+}
+
+func Collectdmglog(dst string, configPath string) error {
 	dmgLogfile := filepath.Join(dst, "dmg_ouput.log")
 
 	for _, dmgCommand := range control.DmgLogCollectCmd {
@@ -164,13 +175,18 @@ func CollectServerLog(dst string) error {
 		return err
 	}
 
+	// Get the server config
 	cfgPath := getServerConf()
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
 	serverConfig.Load()	
 
 	// Copy server config file
-	err = CopyServerConfig(cfgPath, dst)
+	targetConfig := filepath.Join(dst, "Configs")
+	if err := os.Mkdir(targetConfig, 0700); err != nil && !os.IsExist(err) {
+		return errors.Wrapf(err, "failed to create %s directory", targetConfig)
+	}
+	err = CopyServerConfig(cfgPath, targetConfig)
 	if err != nil {
 		return err
 	}
@@ -211,7 +227,7 @@ func CollectServerLog(dst string) error {
 				err, "Error running daos_metrics -S %d : %s", i, out)
 		}
 
-		engineIdLog := fmt.Sprintf("daos_metrics_srv_id_%d.txt", i)
+		engineIdLog := fmt.Sprintf("daos_metrics_srv_id_%d.log", i)
 		if err := ioutil.WriteFile(filepath.Join(targetLocation, engineIdLog), out, 0644); err != nil {
 			return errors.Wrapf(err, "failed to write %s", filepath.Join(targetLocation, engineIdLog))
 		}
@@ -224,12 +240,24 @@ func CollectServerLog(dst string) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(filepath.Join(targetLocation, "dmg_dump-topology.txt"))
+	f, err := os.Create(filepath.Join(targetLocation, "dmg_dump-topology.log"))
     if err != nil {
         return err
     }
     defer f.Close()
 	hardware.PrintTopology(topo, f)
+
+
+	for _, sysCommand := range control.SysInfoCmd {
+		targetSysinfo := filepath.Join(targetLocation, "sysinfo")
+		if err := os.Mkdir(targetSysinfo, 0700); err != nil && !os.IsExist(err) {
+			return errors.Wrapf(err, "failed to create Sysinfo directory %s", targetSysinfo)
+		}
+		err = cpOutputToFile(sysCommand, targetSysinfo)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 

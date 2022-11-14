@@ -9,7 +9,7 @@ package main
 import (
 	"context"
 	"strings"
-	// "os/exec"
+	"os"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -32,6 +32,10 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
+		return err
+	}
+
 	ctx := context.Background()
 	req := &control.CollectLogReq{
 		Loglocation: cmd.TargetFolder,

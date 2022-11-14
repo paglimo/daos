@@ -31,6 +31,12 @@ var DmgLogCollectCmd = [...] string {
     //"dmg telemetry metrics query", To be done for each servers using -l in the list
 }
 
+var SysInfoCmd = [...] string {
+	"dmesg",
+	"lspci -D",
+	"top -bcn1 -w512",
+}
+
 type (
 	// CollectLogReq contains the parameters for a network scan request.
 	CollectLogReq struct {
