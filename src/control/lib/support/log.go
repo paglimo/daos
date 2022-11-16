@@ -13,12 +13,13 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
+
+const dmgNodeLogFolder = "Dmg_Node_log"
 
 func getRunningConf() (string, bool) {
 	_, err := exec.Command("bash", "-c", "pidof daos_engine").Output()
@@ -100,77 +101,99 @@ func CopyServerConfig(src, dst string) error {
 	return nil
 }
 
-func createLogfolder(target string) (string,  error) {
-	hn, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	targetLocation := filepath.Join(target, hn)
-	fmt.Println("log_location Folder = ", targetLocation)
+func createLogfolder(target string) error {
+	fmt.Println("log_location Folder = ", target)
 	// Create the folder if it's not exist
-	if _, err = os.Stat(targetLocation); os.IsNotExist(err) {
-		fmt.Println("Log folder does not Exists, so creating folder ", string(targetLocation))
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		fmt.Println("Log folder does not Exists, so creating folder ", string(target))
 
-		if err := os.MkdirAll(targetLocation, 0700); err != nil && !os.IsExist(err) {
-			return "", errors.Wrap(err, "failed to create log directory")
+		if err := os.MkdirAll(target, 0700); err != nil && !os.IsExist(err) {
+			return errors.Wrap(err, "failed to create log directory")
 		}
     }
 
-	return targetLocation, nil
+	return nil
 }
 
-func cpOutputToFile(cmd string, target string) error {
+func cpOutputToFile(cmd string, target string) (string, error) {
 	// Run command and copy output to the file
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
-		err = errors.Wrapf(
-			err, "Error running command %s with %s", cmd, out)
+		return "", errors.Wrapf(err, "Error running command %s with %s", cmd, out)
 	}
 
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
-		return errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
+		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
+	}
+
+	return string(out), nil
+}
+
+func CollectDmgSysteminfo(dst string, configPath string) error {
+	targetDmgLog := filepath.Join(dst, "Dmg_log")
+	err := createLogfolder(targetDmgLog)
+	if err != nil {
+		return err
+	}
+
+	for _, dmgCommand := range control.DmgLogCollectCmd {
+		dmgCommand = strings.Join([]string{dmgCommand, "-o", configPath}, " ")
+		_, err = cpOutputToFile(dmgCommand, targetDmgLog)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func Collectdmglog(dst string, configPath string) error {
-	dmgLogfile := filepath.Join(dst, "dmg_ouput.log")
+func CollectDmgNodeinfo(dst string, configPath string) error {
+	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
+	out, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		err = errors.Wrapf(
+			err, "Error running command %s with %s", cmd, out)
+	}
+	temp := strings.Split(string(out), "\n")
 
-	for _, dmgCommand := range control.DmgLogCollectCmd {
-		dmgCommand = strings.Join([]string{dmgCommand, "-o",  configPath}, " ")
-
-		// executing as subshell enables pipes in cmd string and append output to the file.
-		out, err := exec.Command("sh", "-c", dmgCommand).CombinedOutput()
+	for _, v := range temp[2:len(temp)-2] {
+		// List the device health info from server
+		hostName := strings.Fields(v)[3][1:]
+		dmgCommand := strings.Join([]string{control.DmgListDeviceCmd, "-o", configPath, "-l", hostName}, " ")
+		fmt.Println(" -- SAMIR HOSTNAME ", dmgCommand)
+		targetDmgLog := filepath.Join(dst, hostName, dmgNodeLogFolder)
+		output, err := cpOutputToFile(dmgCommand, targetDmgLog)
 		if err != nil {
-			err = errors.Wrapf(
-				err, "Error running %s: %s", dmgCommand, out)
-		}
-
-		f, err := common.AppendFile(dmgLogfile)
-		if err != nil {
 			return err
 		}
 
-		output:= strings.Repeat("=", 50) + "\n" + string(dmgCommand) + "\n" + strings.Repeat("-", 30)
-		if _, err := f.WriteString(output); err != nil {
-			return err
-		}
-
-		output = "\n" +string(out) + "\n"
-		if _, err := f.WriteString(output); err != nil {
-			return err
-		}
-		defer f.Close()
+		// List the device health info from each server
+        for _, v1 := range strings.Split(output, "\n") {
+			if strings.Contains(v1, "UUID"){
+				device := strings.Fields(v1)[0][5:]
+				deviceHealthcmd := strings.Join([]string{
+					control.DmgDeviceHealthCmd, "-u", device, "-l", hostName, "-o", configPath}, " ")
+				fmt.Println(deviceHealthcmd)
+				output, err = cpOutputToFile(deviceHealthcmd, targetDmgLog)
+				if err != nil {
+					return err
+				}
+            }
+        }
 	}
 
 	return nil
 }
 
 func CollectServerLog(dst string) error {
-	targetLocation, err := createLogfolder(dst)
+	hn, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+
+	targetLocation := filepath.Join(dst, hn)
+	err = createLogfolder(targetLocation)
 	if err != nil {
 		return err
 	}
@@ -216,20 +239,18 @@ func CollectServerLog(dst string) error {
 	}
 
 	// Copy daos_metrics log
+	dmgNodeLocation := filepath.Join(targetLocation, dmgNodeLogFolder)
+	err = createLogfolder(dmgNodeLocation)
+	if err != nil {
+		return err
+	}
 	for i := range serverConfig.Engines {
 		engineId := fmt.Sprintf("%d", i)
 		cmd := strings.Join([]string{"daos_metrics", "-S",  engineId}, " ")
 
-		// executing as subshell enables pipes in cmd string
-		out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+		_, err = cpOutputToFile(cmd, dmgNodeLocation)
 		if err != nil {
-			err = errors.Wrapf(
-				err, "Error running daos_metrics -S %d : %s", i, out)
-		}
-
-		engineIdLog := fmt.Sprintf("daos_metrics_srv_id_%d.log", i)
-		if err := ioutil.WriteFile(filepath.Join(targetLocation, engineIdLog), out, 0644); err != nil {
-			return errors.Wrapf(err, "failed to write %s", filepath.Join(targetLocation, engineIdLog))
+			return err
 		}
 	}
 
@@ -240,20 +261,21 @@ func CollectServerLog(dst string) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(filepath.Join(targetLocation, "dmg_dump-topology.log"))
+	f, err := os.Create(filepath.Join(dmgNodeLocation, "daos_server dump-topology"))
     if err != nil {
         return err
     }
     defer f.Close()
 	hardware.PrintTopology(topo, f)
 
-
+	// Collect system related information
+	targetSysinfo := filepath.Join(targetLocation, "sysinfo")
+	err = createLogfolder(targetSysinfo)
+	if err != nil {
+		return err
+	}
 	for _, sysCommand := range control.SysInfoCmd {
-		targetSysinfo := filepath.Join(targetLocation, "sysinfo")
-		if err := os.Mkdir(targetSysinfo, 0700); err != nil && !os.IsExist(err) {
-			return errors.Wrapf(err, "failed to create Sysinfo directory %s", targetSysinfo)
-		}
-		err = cpOutputToFile(sysCommand, targetSysinfo)
+		_, err = cpOutputToFile(sysCommand, targetSysinfo)
 		if err != nil {
 			return err
 		}

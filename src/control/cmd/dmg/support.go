@@ -58,7 +58,12 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		return err
 	}
 
-	err = support.Collectdmglog(cmd.TargetFolder, cmd.cfgCmd.config.Path)
+	err = support.CollectDmgSysteminfo(cmd.TargetFolder, cmd.cfgCmd.config.Path)
+	if err != nil {
+		return err
+	}
+
+	err = support.CollectDmgNodeinfo(cmd.TargetFolder, cmd.cfgCmd.config.Path)
 	if err != nil {
 		return err
 	}
