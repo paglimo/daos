@@ -21,6 +21,7 @@ type collectLogCmd struct {
 	optCfgCmd
 	cmdutil.LogCmd
 	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
+	Archive bool `short:"z" long:"archive" description:"Archive the log/config files"`
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
@@ -31,6 +32,13 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	err := support.CollectServerLog(cmd.TargetFolder)
 	if err != nil {
 		return err
+	}
+
+	if cmd.Archive == true {
+		err = support.ArchiveLogs(cmd.TargetFolder)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

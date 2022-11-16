@@ -32,6 +32,7 @@ const DmgListDeviceCmd = "dmg storage query list-devices"
 const DmgDeviceHealthCmd = "dmg storage query device-health"
 
 var SysInfoCmd = [...] string {
+	"daos_server version",
 	"dmesg",
 	"lspci -D",
 	"top -bcn1 -w512",

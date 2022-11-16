@@ -29,6 +29,7 @@ type collectLogCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
+	Archive bool `short:"z" long:"archive" description:"Archive the log/config files"`
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
@@ -66,6 +67,13 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	err = support.CollectDmgNodeinfo(cmd.TargetFolder, cmd.cfgCmd.config.Path)
 	if err != nil {
 		return err
+	}
+
+	if cmd.Archive == true {
+		err = support.ArchiveLogs(cmd.TargetFolder)
+		if err != nil {
+			return err
+		}
 	}
 
 	cmd.Info(bld.String())
