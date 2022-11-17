@@ -7,6 +7,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
@@ -29,7 +31,9 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		cmd.TargetFolder = "/tmp/daos_support_logs"
 	}
 
-	err := support.CollectServerLog(cmd.TargetFolder)
+	fmt.Println(" -- SAMIR Server Config cmd.config -- ", cmd.configPath())
+
+	err := support.CollectServerLog(cmd.TargetFolder, cmd.configPath())
 	if err != nil {
 		return err
 	}

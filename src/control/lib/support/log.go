@@ -44,18 +44,18 @@ func getRunningConf() (string, bool) {
 	return running_config, true
 }
 
-func getServerConf() string{
+func getServerConf() (string, bool) {
 	conf, err :=  getRunningConf()
 
 	if err == true {
-        return conf
+        return conf, err
     }
 
 	// Return the default config
 	serverConfig := config.DefaultServer()
 	default_path := filepath.Join(serverConfig.SocketDir, config.ConfigOut)
 
-	return default_path
+	return default_path, err
 }
 
 func cpFile(src, dst string) error {
@@ -125,6 +125,7 @@ func createFolder(target string) error {
 func cpOutputToFile(cmd string, target string) (string, error) {
 	// Run command and copy output to the file
 	// executing as subshell enables pipes in cmd string
+	fmt.Println(" -- SAMIR Run Command -- ", cmd)
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
 		return "", errors.Wrapf(err, "Error running command %s with %s", cmd, out)
@@ -177,16 +178,16 @@ func CollectDmgSysteminfo(dst string, configPath string) error {
 }
 
 func CollectDmgNodeinfo(dst string, configPath string) error {
+	// Read all the system domain name
 	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
-		err = errors.Wrapf(
-			err, "Error running command %s with %s", cmd, out)
+		err = errors.Wrapf(err, "Error running command %s with %s", cmd, out)
 	}
 	temp := strings.Split(string(out), "\n")
 
 	for _, v := range temp[2:len(temp)-2] {
-		// List the device health info from server
+		// Copy all the devices information for each server
 		hostName := strings.Fields(v)[3][1:]
 		dmgCommand := strings.Join([]string{control.DmgListDeviceCmd, "-o", configPath, "-l", hostName}, " ")
 		targetDmgLog := filepath.Join(dst, hostName, dmgNodeLogFolder)
@@ -195,13 +196,12 @@ func CollectDmgNodeinfo(dst string, configPath string) error {
 			return err
 		}
 
-		// List the device health info from each server
+		// Copy each device health from each server
         for _, v1 := range strings.Split(output, "\n") {
 			if strings.Contains(v1, "UUID"){
 				device := strings.Fields(v1)[0][5:]
 				deviceHealthcmd := strings.Join([]string{
 					control.DmgDeviceHealthCmd, "-u", device, "-l", hostName, "-o", configPath}, " ")
-					fmt.Println(" -- SAMIR DMG System Command -- ", deviceHealthcmd)
 				output, err = cpOutputToFile(deviceHealthcmd, targetDmgLog)
 				if err != nil {
 					return err
@@ -213,23 +213,30 @@ func CollectDmgNodeinfo(dst string, configPath string) error {
 	return nil
 }
 
-func CollectServerLog(dst string) error {
+func CollectServerLog(dst string, conf ...string) error {
+	// Get the running daos_engine state and config from running process
+	cfgPath, serverRunning := getServerConf()
+	serverConfig := config.DefaultServer()
+
+	// Use the provided config in case of engines are down.
+	if len(conf) > 0 {
+		cfgPath = conf[0]
+	}
+
+	serverConfig.SetPath(cfgPath)
+	serverConfig.Load()
+	fmt.Println(" -- SAMIRConfig PASED -- ", cfgPath)
+
+	// Create the individual folder on each server
 	hn, err := os.Hostname()
 	if err != nil {
 		return err
 	}
-
 	targetLocation := filepath.Join(dst, hn)
 	err = createFolder(targetLocation)
 	if err != nil {
 		return err
 	}
-
-	// Get the server config
-	cfgPath := getServerConf()
-	serverConfig := config.DefaultServer()
-	serverConfig.SetPath(cfgPath)
-	serverConfig.Load()	
 
 	// Copy server config file
 	targetConfig := filepath.Join(targetLocation, daosConfig)
@@ -242,14 +249,13 @@ func CollectServerLog(dst string) error {
 		return err
 	}
 
-	// Copy DAOS server engine log files
+	// Copy all the log files for each engine
 	targetServerLogs := filepath.Join(targetLocation, serverLogs)
 	err = createFolder(targetServerLogs)
 	if err != nil {
 		return err
 	}
 	for i := range serverConfig.Engines {
-		// Find the matching file incase of log file is based on PID or it has backup
 		matches, _ := filepath.Glob(serverConfig.Engines[i].LogFile + "*")
 		for _, logfile := range matches {
 			err := cpFile(logfile, targetServerLogs)
@@ -271,23 +277,27 @@ func CollectServerLog(dst string) error {
 		return err
 	}
 
-	// Copy daos_metrics log
+	// Create the dmg specific folder for each server
 	dmgNodeLocation := filepath.Join(targetLocation, dmgNodeLogFolder)
 	err = createFolder(dmgNodeLocation)
 	if err != nil {
 		return err
 	}
-	for i := range serverConfig.Engines {
-		engineId := fmt.Sprintf("%d", i)
-		cmd := strings.Join([]string{"daos_metrics", "-S",  engineId}, " ")
 
-		_, err = cpOutputToFile(cmd, dmgNodeLocation)
-		if err != nil {
-			return err
+	// Copy daos_metrics log if server is still running
+	if serverRunning == true {
+		for i := range serverConfig.Engines {
+			engineId := fmt.Sprintf("%d", i)
+			daoscmd := strings.Join([]string{"daos_metrics", "-S",  engineId}, " ")
+
+			_, err = cpOutputToFile(daoscmd, dmgNodeLocation)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	// Collect dump-topology output
+	// Collect dump-topology output for each server
 	log := logging.NewCommandLineLogger()
 	hwProv := hwprov.DefaultTopologyProvider(log)
 	topo, err := hwProv.GetTopology(context.Background())
