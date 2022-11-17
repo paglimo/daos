@@ -31,6 +31,12 @@ var DmgLogCollectCmd = [...] string {
 const DmgListDeviceCmd = "dmg storage query list-devices"
 const DmgDeviceHealthCmd = "dmg storage query device-health"
 
+var DasoAgnetInfoCmd = [...] string {
+	"daos_agent version",
+	"daos_agent net-scan",
+	"daos_agent dump-topology",
+}
+
 var SysInfoCmd = [...] string {
 	"daos_server version",
 	"dmesg",

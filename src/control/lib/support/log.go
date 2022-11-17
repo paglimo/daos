@@ -23,11 +23,12 @@ import (
 
 // Folder structure to copy logs and configs
 const (
-	dmgSystemLogFolder = "DmgSystemLog" // Copy the dmg command output specific to full DAOS system
-	dmgNodeLogFolder = "DmgNodeLog" 	// Copy the dmg command output specific to the node storage to individual node log folder
-	systemInfo = "SysInfo"				// Copy the system related information
-	serverLogs = "ServerLogs"			// Copy the server/conrol and helper logs
-	daosConfig = "ServerConfig"			// Copy the server config
+	dmgSystemLogFolder = "DmgSystemLog"    // Copy the dmg command output for DAOS system
+	dmgNodeLogFolder = "DmgNodeLog" 	   // Copy the dmg command output specific to the storage.
+	daosAgentNodeLog = "daosAgentNodeLog"  // Copy the daos_agent command output specific to the node.
+	systemInfo = "SysInfo"				   // Copy the system related information
+	serverLogs = "ServerLogs"			   // Copy the server/conrol and helper logs
+	daosConfig = "ServerConfig"			   // Copy the server config
 )
 
 func getRunningConf() (string, bool) {
@@ -177,6 +178,21 @@ func CollectDmgSysteminfo(dst string, configPath string) error {
 	return nil
 }
 
+func createHostFolder(dst string)(string, error) {
+	// Create the individual folder on each server
+	hn, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	targetLocation := filepath.Join(dst, hn)
+	err = createFolder(targetLocation)
+	if err != nil {
+		return "", err
+	}
+
+	return targetLocation, nil
+}
+
 func CollectDmgNodeinfo(dst string, configPath string) error {
 	// Read all the system domain name
 	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
@@ -213,6 +229,29 @@ func CollectDmgNodeinfo(dst string, configPath string) error {
 	return nil
 }
 
+
+func CollectClientLog(dst string) error {
+	targetLocation, err := createHostFolder(dst)
+	if err != nil {
+		return err
+	}
+
+	// Collect daos_agent logs
+	agentNodeLocation := filepath.Join(targetLocation, daosAgentNodeLog)
+	err = createFolder(agentNodeLocation)
+	if err != nil {
+		return err
+	}
+	for _, agentCommand := range control.DasoAgnetInfoCmd {
+		_, err = cpOutputToFile(agentCommand, agentNodeLocation)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func CollectServerLog(dst string, conf ...string) error {
 	// Get the running daos_engine state and config from running process
 	cfgPath, serverRunning := getServerConf()
@@ -228,12 +267,7 @@ func CollectServerLog(dst string, conf ...string) error {
 	fmt.Println(" -- SAMIRConfig PASED -- ", cfgPath)
 
 	// Create the individual folder on each server
-	hn, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-	targetLocation := filepath.Join(dst, hn)
-	err = createFolder(targetLocation)
+	targetLocation, err := createHostFolder(dst)
 	if err != nil {
 		return err
 	}
