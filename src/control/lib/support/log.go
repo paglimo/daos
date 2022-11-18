@@ -115,6 +115,7 @@ func createFolder(target string) error {
 	if _, err := os.Stat(target); os.IsNotExist(err) {
 		fmt.Println("Log folder does not Exists, so creating folder ", target)
 
+		cmd = strings.ReplaceAll(cmd, "/", "_")
 		if err := os.MkdirAll(target, 0700); err != nil && !os.IsExist(err) {
 			return errors.Wrapf(err, "failed to create log directory %s", target)
 		}
