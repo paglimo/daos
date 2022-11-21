@@ -7,8 +7,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
@@ -22,6 +20,7 @@ type SupportCmd struct {
 type collectLogCmd struct {
 	optCfgCmd
 	cmdutil.LogCmd
+	Continue bool `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
 	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
 	Archive bool `short:"z" long:"archive" description:"Archive the log/config files"`
 }
@@ -31,15 +30,17 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		cmd.TargetFolder = "/tmp/daos_support_logs"
 	}
 
-	fmt.Println(" -- SAMIR Server Config cmd.config -- ", cmd.configPath())
+	params := support.Params{}
+	params.Config = cmd.configPath()
+	params.Cont = cmd.Continue
 
-	err := support.CollectServerLog(cmd.TargetFolder, cmd.configPath())
+	err := support.CollectServerLog(cmd.TargetFolder, cmd.Logger, params)
 	if err != nil {
 		return err
 	}
 
 	if cmd.Archive == true {
-		err = support.ArchiveLogs(cmd.TargetFolder)
+		err = support.ArchiveLogs(cmd.TargetFolder, cmd.Logger)
 		if err != nil {
 			return err
 		}

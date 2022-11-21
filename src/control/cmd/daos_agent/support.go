@@ -18,6 +18,7 @@ type SupportCmd struct {
 // collectLogCmd is the struct representing the command to collect the log from client side.
 type collectLogCmd struct {
 	cmdutil.LogCmd
+	Continue bool `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
 	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
 	Archive bool `short:"z" long:"archive" description:"Archive the log/config files"`
 }
@@ -27,13 +28,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		cmd.TargetFolder = "/tmp/daos_support_logs"
 	}
 
-	err := support.CollectClientLog(cmd.TargetFolder)
+	params := support.Params{}
+	params.Cont = cmd.Continue
+
+	err := support.CollectClientLog(cmd.TargetFolder, cmd.Logger, params)
 	if err != nil {
 		return err
 	}
 
 	if cmd.Archive == true {
-		err = support.ArchiveLogs(cmd.TargetFolder)
+		err = support.ArchiveLogs(cmd.TargetFolder, cmd.Logger)
 		if err != nil {
 			return err
 		}
