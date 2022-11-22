@@ -18,9 +18,9 @@ type SupportCmd struct {
 // collectLogCmd is the struct representing the command to collect the log from client side.
 type collectLogCmd struct {
 	cmdutil.LogCmd
-	Continue bool `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
+	Continue     bool   `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
 	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
-	Archive bool `short:"z" long:"archive" description:"Archive the log/config files"`
+	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {

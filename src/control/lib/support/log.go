@@ -1,48 +1,48 @@
 package support
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"os/exec"
-	"strings"
 	"io"
 	"io/ioutil"
-	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 // Folder structure to copy logs and configs
 const (
-	dmgSystemLogFolder = "DmgSystemLog"    // Copy the dmg command output for DAOS system
-	dmgNodeLogFolder = "DmgNodeLog" 	   // Copy the dmg command output specific to the storage.
-	daosAgentNodeLog = "daosAgentNodeLog"  // Copy the daos_agent command output specific to the node.
-	systemInfo = "SysInfo"				   // Copy the system related information
-	serverLogs = "ServerLogs"			   // Copy the server/conrol and helper logs
-	daosConfig = "ServerConfig"			   // Copy the server config
+	dmgSystemLogFolder = "DmgSystemLog"     // Copy the dmg command output for DAOS system
+	dmgNodeLogFolder   = "DmgNodeLog"       // Copy the dmg command output specific to the storage.
+	daosAgentNodeLog   = "daosAgentNodeLog" // Copy the daos_agent command output specific to the node.
+	systemInfo         = "SysInfo"          // Copy the system related information
+	serverLogs         = "ServerLogs"       // Copy the server/conrol and helper logs
+	daosConfig         = "ServerConfig"     // Copy the server config
 )
 
 type Params struct {
-	Config 		string
-	Continue 	bool
-	Hostlist 	string
+	Config   string
+	Continue bool
+	Hostlist string
 }
 
 func getRunningConf(log logging.Logger) (string, bool) {
 	_, err := exec.Command("bash", "-c", "pidof daos_engine").Output()
-    if err != nil {
-        log.Info("daos_engine is not running on server")
-        return "", false
-    }	
+	if err != nil {
+		log.Info("daos_engine is not running on server")
+		return "", false
+	}
 
 	cmd := "ps -eo args | grep daos_engine | head -n 1 | grep -oP '(?<=-d )[^ ]*'"
 	stdout, err := exec.Command("bash", "-c", cmd).Output()
@@ -52,11 +52,11 @@ func getRunningConf(log logging.Logger) (string, bool) {
 }
 
 func getServerConf(log logging.Logger) (string, bool) {
-	conf, err :=  getRunningConf(log)
+	conf, err := getRunningConf(log)
 
 	if err == true {
-        return conf, err
-    }
+		return conf, err
+	}
 
 	// Return the default config
 	serverConfig := config.DefaultServer()
@@ -91,7 +91,7 @@ func cpFile(src, dst string, log logging.Logger) error {
 }
 
 // Check if file or directory that starts with . which is hidden
-func IsHidden(filename string) (bool) {
+func IsHidden(filename string) bool {
 	if filename[0:1] == "." {
 		return true
 	} else {
@@ -108,7 +108,7 @@ func CopyServerConfig(src, dst string, log logging.Logger) error {
 
 	// Rename the file if it's hidden
 	result := IsHidden(filepath.Base(src))
-	if result == true{
+	if result == true {
 		hiddenConf := filepath.Join(dst, filepath.Base(src))
 		nonhiddenConf := filepath.Join(dst, filepath.Base(src)[1:])
 		os.Rename(hiddenConf, nonhiddenConf)
@@ -125,7 +125,7 @@ func createFolder(target string, log logging.Logger) error {
 		if err := os.MkdirAll(target, 0700); err != nil && !os.IsExist(err) {
 			return errors.Wrapf(err, "failed to create log directory %s", target)
 		}
-    }
+	}
 
 	return nil
 }
@@ -161,7 +161,7 @@ func ArchiveLogs(target string, log logging.Logger) error {
 	log.Debugf("Archiving the log folder %s", tarFileName)
 	fileToWrite, err := os.OpenFile(tarFileName, os.O_CREATE|os.O_RDWR, os.FileMode(0755))
 	if err != nil {
-			return err
+		return err
 	}
 	if _, err := io.Copy(fileToWrite, &buf); err != nil {
 		return err
@@ -188,7 +188,7 @@ func CollectDmgSysteminfo(dst string, configPath string, log logging.Logger) err
 	return nil
 }
 
-func createHostFolder(dst string, log logging.Logger)(string, error) {
+func createHostFolder(dst string, log logging.Logger) (string, error) {
 	// Create the individual folder on each server
 	hn, err := os.Hostname()
 	if err != nil {
@@ -203,7 +203,7 @@ func createHostFolder(dst string, log logging.Logger)(string, error) {
 	return targetLocation, nil
 }
 
-func getSysNameFromQuery(configPath string, log logging.Logger) [] string{
+func getSysNameFromQuery(configPath string, log logging.Logger) []string {
 	var hostName []string
 
 	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
@@ -213,7 +213,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) [] string{
 	}
 	temp := strings.Split(string(out), "\n")
 
-	for _, v := range temp[2:len(temp)-2] {
+	for _, v := range temp[2 : len(temp)-2] {
 		hostName = append(hostName, strings.Fields(v)[3][1:])
 	}
 
@@ -239,8 +239,8 @@ func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger, opts 
 		}
 
 		// Copy each device health from each server
-        for _, v1 := range strings.Split(output, "\n") {
-			if strings.Contains(v1, "UUID"){
+		for _, v1 := range strings.Split(output, "\n") {
+			if strings.Contains(v1, "UUID") {
 				device := strings.Fields(v1)[0][5:]
 				deviceHealthcmd := strings.Join([]string{
 					control.DmgDeviceHealthCmd, "-u", device, "-l", hostName, "-o", configPath}, " ")
@@ -248,8 +248,8 @@ func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger, opts 
 				if err != nil {
 					return err
 				}
-            }
-        }
+			}
+		}
 	}
 
 	return nil
@@ -352,7 +352,7 @@ func CollectServerLog(dst string, log logging.Logger, opts ...Params) error {
 	if serverRunning == true {
 		for i := range serverConfig.Engines {
 			engineId := fmt.Sprintf("%d", i)
-			daoscmd := strings.Join([]string{"daos_metrics", "-S",  engineId}, " ")
+			daoscmd := strings.Join([]string{"daos_metrics", "-S", engineId}, " ")
 
 			_, err = cpOutputToFile(daoscmd, dmgNodeLocation, log)
 			if err != nil && continuCollect == false {
@@ -372,7 +372,7 @@ func CollectServerLog(dst string, log logging.Logger, opts ...Params) error {
 	if err != nil && continuCollect == false {
 		return err
 	}
-    defer f.Close()
+	defer f.Close()
 	hardware.PrintTopology(topo, f)
 
 	// Collect system related information

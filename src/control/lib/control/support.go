@@ -14,7 +14,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
-var DmgLogCollectCmd = [...] string {
+var DmgLogCollectCmd = [...]string{
 	"dmg system get-prop",
 	"dmg system query",
 	"dmg system list-pools",
@@ -31,13 +31,13 @@ var DmgLogCollectCmd = [...] string {
 const DmgListDeviceCmd = "dmg storage query list-devices"
 const DmgDeviceHealthCmd = "dmg storage query device-health"
 
-var DasoAgnetInfoCmd = [...] string {
+var DasoAgnetInfoCmd = [...]string{
 	"daos_agent version",
 	"daos_agent net-scan",
 	"daos_agent dump-topology",
 }
 
-var SysInfoCmd = [...] string {
+var SysInfoCmd = [...]string{
 	"daos_server version",
 	"dmesg",
 	"lspci -D",
@@ -49,7 +49,7 @@ type (
 	CollectLogReq struct {
 		unaryRequest
 		Loglocation string
-		Continue bool
+		Continue    bool
 	}
 
 	// CollectLogResp contains the results of a network scan.
@@ -67,7 +67,7 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).CollectLog(ctx, &ctlpb.CollectLogReq{
 			Loglocation: req.Loglocation,
-			Continue: req.Continue,
+			Continue:    req.Continue,
 		})
 	})
 

@@ -7,17 +7,17 @@
 package common
 
 import (
-        "archive/tar"
-        "io"
-        "os"
-        "path/filepath"
-		"compress/gzip"
+	"archive/tar"
+	"compress/gzip"
+	"io"
+	"os"
+	"path/filepath"
 )
 
 func FolderCompress(src string, buf io.Writer) error {
 	gzipWriter := gzip.NewWriter(buf)
 	tarWriter := tar.NewWriter(gzipWriter)
-	
+
 	// Loop thorough the folder
 	filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
 		// generate tar File header
@@ -33,7 +33,7 @@ func FolderCompress(src string, buf io.Writer) error {
 		if err := tarWriter.WriteHeader(header); err != nil {
 			return err
 		}
-		
+
 		// Write file content if it's not directory
 		if !fi.IsDir() {
 			data, err := os.Open(file)
@@ -46,7 +46,7 @@ func FolderCompress(src string, buf io.Writer) error {
 		}
 		return nil
 	})
-	
+
 	// Create the tar
 	if err := tarWriter.Close(); err != nil {
 		return err

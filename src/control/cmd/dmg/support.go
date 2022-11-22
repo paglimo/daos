@@ -8,8 +8,8 @@ package main
 
 import (
 	"context"
-	"strings"
 	"os"
+	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -28,9 +28,9 @@ type collectLogCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Continue bool `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
+	Continue     bool   `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
 	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
-	Archive bool `short:"z" long:"archive" description:"Archive the log/config files"`
+	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
@@ -41,7 +41,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.CollectLogReq{
 		Loglocation: cmd.TargetFolder,
-		Continue: cmd.Continue,
+		Continue:    cmd.Continue,
 	}
 
 	req.SetHostList(cmd.hostlist)
