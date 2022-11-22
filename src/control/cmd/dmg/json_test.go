@@ -119,6 +119,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "--ranks", "0")
 			case "system clear-exclude":
 				testArgs = append(testArgs, "--ranks", "0")
+			case "support collectlog":
+				testArgs = append(testArgs, "-s", "/tmp/support_testlog")
 			}
 
 			// replace os.Stdout so that we can verify the generated output
