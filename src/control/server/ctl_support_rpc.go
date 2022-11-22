@@ -21,7 +21,7 @@ func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogRe
 	c.log.Infof("CollectLog: LogFolder location is %s", req.Loglocation)
 
 	params := support.Params{}
-	params.Cont = req.Continue
+	params.Continue = req.Continue
 
 	err := support.CollectServerLog(req.Loglocation, c.log, params)
 	if err != nil {

@@ -32,8 +32,9 @@ const (
 )
 
 type Params struct {
-	Config 	string
-	Cont 	bool
+	Config 		string
+	Continue 	bool
+	Hostlist 	string
 }
 
 func getRunningConf(log logging.Logger) (string, bool) {
@@ -138,7 +139,7 @@ func cpOutputToFile(cmd string, target string, log logging.Logger) (string, erro
 		return "", errors.Wrapf(err, "Error running command %s with %s", cmd, out)
 	}
 
-	log.Debugf("SUCCESS -- %s", cmd)
+	log.Debugf("SUCCESS -- %s > %s ", cmd, target)
 	cmd = strings.ReplaceAll(cmd, "/", "_")
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		log.Errorf("FAILED -- To Write command -- %s -- %s", cmd, err)
@@ -202,8 +203,9 @@ func createHostFolder(dst string, log logging.Logger)(string, error) {
 	return targetLocation, nil
 }
 
-func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger) error {
-	// Read all the system domain name
+func getSysNameFromQuery(configPath string, log logging.Logger) [] string{
+	var hostName []string
+
 	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
@@ -212,8 +214,23 @@ func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger) error
 	temp := strings.Split(string(out), "\n")
 
 	for _, v := range temp[2:len(temp)-2] {
+		hostName = append(hostName, strings.Fields(v)[3][1:])
+	}
+
+	return hostName
+}
+
+func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger, opts ...Params) error {
+	// Get the Hostlist
+	var hostNames []string
+	if len(opts[0].Hostlist) > 0 {
+		hostNames = strings.Fields(opts[0].Hostlist)
+	} else {
+		hostNames = getSysNameFromQuery(configPath, log)
+	}
+
+	for _, hostName := range hostNames {
 		// Copy all the devices information for each server
-		hostName := strings.Fields(v)[3][1:]
 		dmgCommand := strings.Join([]string{control.DmgListDeviceCmd, "-o", configPath, "-l", hostName}, " ")
 		targetDmgLog := filepath.Join(dst, hostName, dmgNodeLogFolder)
 		output, err := cpOutputToFile(dmgCommand, targetDmgLog, log)
@@ -238,7 +255,6 @@ func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger) error
 	return nil
 }
 
-
 func CollectClientLog(dst string, log logging.Logger, opts ...Params) error {
 	targetLocation, err := createHostFolder(dst, log)
 	if err != nil {
@@ -248,12 +264,12 @@ func CollectClientLog(dst string, log logging.Logger, opts ...Params) error {
 	// Collect daos_agent logs
 	agentNodeLocation := filepath.Join(targetLocation, daosAgentNodeLog)
 	err = createFolder(agentNodeLocation, log)
-	if err != nil && opts[0].Cont == false {
+	if err != nil && opts[0].Continue == false {
 		return err
 	}
 	for _, agentCommand := range control.DasoAgnetInfoCmd {
 		_, err = cpOutputToFile(agentCommand, agentNodeLocation, log)
-		if err != nil && opts[0].Cont == false {
+		if err != nil && opts[0].Continue == false {
 			return err
 		}
 	}
@@ -272,7 +288,7 @@ func CollectServerLog(dst string, log logging.Logger, opts ...Params) error {
 		cfgPath = opts[0].Config
 	}
 
-	if opts[0].Cont == true {
+	if opts[0].Continue == true {
 		continuCollect = true
 	}
 

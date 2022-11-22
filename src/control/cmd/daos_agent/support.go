@@ -29,7 +29,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	params := support.Params{}
-	params.Cont = cmd.Continue
+	params.Continue = cmd.Continue
 
 	err := support.CollectClientLog(cmd.TargetFolder, cmd.Logger, params)
 	if err != nil {

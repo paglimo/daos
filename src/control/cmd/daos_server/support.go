@@ -32,7 +32,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	params := support.Params{}
 	params.Config = cmd.configPath()
-	params.Cont = cmd.Continue
+	params.Continue = cmd.Continue
 
 	err := support.CollectServerLog(cmd.TargetFolder, cmd.Logger, params)
 	if err != nil {

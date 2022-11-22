@@ -66,7 +66,11 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		return err
 	}
 
-	err = support.CollectDmgNodeinfo(cmd.TargetFolder, cmd.cfgCmd.config.Path, cmd.Logger)
+	params := support.Params{}
+	params.Hostlist = strings.Join(cmd.hostlist, " ")
+	params.Continue = cmd.Continue
+
+	err = support.CollectDmgNodeinfo(cmd.TargetFolder, cmd.cfgCmd.config.Path, cmd.Logger, params)
 	if err != nil && cmd.Continue == false {
 		return err
 	}
