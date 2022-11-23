@@ -48,8 +48,8 @@ type (
 	// CollectLogReq contains the parameters for a network scan request.
 	CollectLogReq struct {
 		unaryRequest
-		Loglocation string
-		Continue    bool
+		TargetFolder string
+		Continue     bool
 	}
 
 	// CollectLogResp contains the results of a network scan.
@@ -66,8 +66,8 @@ type (
 func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq) (*CollectLogResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).CollectLog(ctx, &ctlpb.CollectLogReq{
-			Loglocation: req.Loglocation,
-			Continue:    req.Continue,
+			TargetFolder: req.TargetFolder,
+			Continue:     req.Continue,
 		})
 	})
 

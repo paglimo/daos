@@ -32,9 +32,10 @@ const (
 )
 
 type Params struct {
-	Config   string
-	Continue bool
-	Hostlist string
+	Config       string
+	Continue     bool
+	Hostlist     string
+	TargetFolder string
 }
 
 func getRunningConf(log logging.Logger) (string, bool) {
@@ -149,36 +150,37 @@ func cpOutputToFile(cmd string, target string, log logging.Logger) (string, erro
 	return string(out), nil
 }
 
-func ArchiveLogs(target string, log logging.Logger) error {
+func ArchiveLogs(log logging.Logger, opts ...Params) error {
 	var buf bytes.Buffer
-	err := common.FolderCompress(target, &buf)
-	if err != nil {
+	err := common.FolderCompress(opts[0].TargetFolder, &buf)
+	if err != nil && opts[0].Continue == false {
 		return err
 	}
 
 	// write to the the .tar.gzip
-	tarFileName := fmt.Sprintf("%s.tar.gz", target)
+	tarFileName := fmt.Sprintf("%s.tar.gz", opts[0].TargetFolder)
 	log.Debugf("Archiving the log folder %s", tarFileName)
 	fileToWrite, err := os.OpenFile(tarFileName, os.O_CREATE|os.O_RDWR, os.FileMode(0755))
-	if err != nil {
+	if err != nil && opts[0].Continue == false {
 		return err
 	}
-	if _, err := io.Copy(fileToWrite, &buf); err != nil {
+	_, err = io.Copy(fileToWrite, &buf)
+	if err != nil && opts[0].Continue == false {
 		return err
 	}
 
 	return nil
 }
 
-func CollectDmgSysteminfo(dst string, configPath string, log logging.Logger) error {
-	targetDmgLog := filepath.Join(dst, dmgSystemLogFolder)
+func CollectDmgSysteminfo(log logging.Logger, opts ...Params) error {
+	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogFolder)
 	err := createFolder(targetDmgLog, log)
 	if err != nil {
 		return err
 	}
 
 	for _, dmgCommand := range control.DmgLogCollectCmd {
-		dmgCommand = strings.Join([]string{dmgCommand, "-o", configPath}, " ")
+		dmgCommand = strings.Join([]string{dmgCommand, "-o", opts[0].Config}, " ")
 		_, err = cpOutputToFile(dmgCommand, targetDmgLog, log)
 		if err != nil {
 			return err
@@ -220,21 +222,30 @@ func getSysNameFromQuery(configPath string, log logging.Logger) []string {
 	return hostName
 }
 
-func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger, opts ...Params) error {
+func CollectDmgNodeinfo(log logging.Logger, opts ...Params) error {
 	// Get the Hostlist
 	var hostNames []string
+	var output string
+
 	if len(opts[0].Hostlist) > 0 {
 		hostNames = strings.Fields(opts[0].Hostlist)
 	} else {
-		hostNames = getSysNameFromQuery(configPath, log)
+		hostNames = getSysNameFromQuery(opts[0].Config, log)
 	}
 
 	for _, hostName := range hostNames {
 		// Copy all the devices information for each server
-		dmgCommand := strings.Join([]string{control.DmgListDeviceCmd, "-o", configPath, "-l", hostName}, " ")
-		targetDmgLog := filepath.Join(dst, hostName, dmgNodeLogFolder)
-		output, err := cpOutputToFile(dmgCommand, targetDmgLog, log)
-		if err != nil {
+		dmgCommand := strings.Join([]string{control.DmgListDeviceCmd, "-o", opts[0].Config, "-l", hostName}, " ")
+		targetDmgLog := filepath.Join(opts[0].TargetFolder, hostName, dmgNodeLogFolder)
+
+		// Create the Folder if log location is not shared FS.
+		err := createFolder(targetDmgLog, log)
+		if err != nil && opts[0].Continue == false {
+			return err
+		}
+
+		output, err = cpOutputToFile(dmgCommand, targetDmgLog, log)
+		if err != nil && opts[0].Continue == false {
 			return err
 		}
 
@@ -243,9 +254,9 @@ func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger, opts 
 			if strings.Contains(v1, "UUID") {
 				device := strings.Fields(v1)[0][5:]
 				deviceHealthcmd := strings.Join([]string{
-					control.DmgDeviceHealthCmd, "-u", device, "-l", hostName, "-o", configPath}, " ")
+					control.DmgDeviceHealthCmd, "-u", device, "-l", hostName, "-o", opts[0].Config}, " ")
 				output, err = cpOutputToFile(deviceHealthcmd, targetDmgLog, log)
-				if err != nil {
+				if err != nil && opts[0].Continue == false {
 					return err
 				}
 			}
@@ -255,8 +266,8 @@ func CollectDmgNodeinfo(dst string, configPath string, log logging.Logger, opts 
 	return nil
 }
 
-func CollectClientLog(dst string, log logging.Logger, opts ...Params) error {
-	targetLocation, err := createHostFolder(dst, log)
+func CollectClientLog(log logging.Logger, opts ...Params) error {
+	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
 		return err
 	}
@@ -277,7 +288,7 @@ func CollectClientLog(dst string, log logging.Logger, opts ...Params) error {
 	return nil
 }
 
-func CollectServerLog(dst string, log logging.Logger, opts ...Params) error {
+func CollectServerLog(log logging.Logger, opts ...Params) error {
 	// Get the running daos_engine state and config from running process
 	cfgPath, serverRunning := getServerConf(log)
 	serverConfig := config.DefaultServer()
@@ -297,7 +308,7 @@ func CollectServerLog(dst string, log logging.Logger, opts ...Params) error {
 	log.Debugf(" -- Server Config File is %s", cfgPath)
 
 	// Create the individual folder on each server
-	targetLocation, err := createHostFolder(dst, log)
+	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil && continuCollect == false {
 		return err
 	}

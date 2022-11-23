@@ -28,16 +28,19 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		cmd.TargetFolder = "/tmp/daos_support_logs"
 	}
 
+	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
+
 	params := support.Params{}
 	params.Continue = cmd.Continue
+	params.TargetFolder = cmd.TargetFolder
 
-	err := support.CollectClientLog(cmd.TargetFolder, cmd.Logger, params)
+	err := support.CollectClientLog(cmd.Logger, params)
 	if err != nil {
 		return err
 	}
 
 	if cmd.Archive == true {
-		err = support.ArchiveLogs(cmd.TargetFolder, cmd.Logger)
+		err = support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err
 		}

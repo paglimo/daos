@@ -34,15 +34,21 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	if cmd.TargetFolder == "" {
+		cmd.TargetFolder = "/tmp/daos_support_logs"
+	}
+
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
 		return err
 	}
 
 	ctx := context.Background()
 	req := &control.CollectLogReq{
-		Loglocation: cmd.TargetFolder,
-		Continue:    cmd.Continue,
+		TargetFolder: cmd.TargetFolder,
+		Continue:     cmd.Continue,
 	}
+
+	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
 
 	req.SetHostList(cmd.hostlist)
 
@@ -61,22 +67,24 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		return err
 	}
 
-	err = support.CollectDmgSysteminfo(cmd.TargetFolder, cmd.cfgCmd.config.Path, cmd.Logger)
+	params := support.Params{}
+	params.Hostlist = strings.Join(cmd.hostlist, " ")
+	params.Continue = cmd.Continue
+	params.TargetFolder = cmd.TargetFolder
+	params.Config = cmd.cfgCmd.config.Path
+
+	err = support.CollectDmgSysteminfo(cmd.Logger, params)
 	if err != nil && cmd.Continue == false {
 		return err
 	}
 
-	params := support.Params{}
-	params.Hostlist = strings.Join(cmd.hostlist, " ")
-	params.Continue = cmd.Continue
-
-	err = support.CollectDmgNodeinfo(cmd.TargetFolder, cmd.cfgCmd.config.Path, cmd.Logger, params)
+	err = support.CollectDmgNodeinfo(cmd.Logger, params)
 	if err != nil && cmd.Continue == false {
 		return err
 	}
 
 	if cmd.Archive == true {
-		err = support.ArchiveLogs(cmd.TargetFolder, cmd.Logger)
+		err = support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err
 		}

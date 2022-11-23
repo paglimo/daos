@@ -18,12 +18,13 @@ import (
 
 // CollectLog retrieves details of network interfaces on remote hosts.
 func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogReq) (*ctlpb.CollectLogResp, error) {
-	c.log.Infof("CollectLog: LogFolder location is %s", req.Loglocation)
+	c.log.Infof("CollectLog: LogFolder location is %s", req.TargetFolder)
 
 	params := support.Params{}
 	params.Continue = req.Continue
+	params.TargetFolder = req.TargetFolder
 
-	err := support.CollectServerLog(req.Loglocation, c.log, params)
+	err := support.CollectServerLog(c.log, params)
 	if err != nil {
 		return nil, err
 	}
