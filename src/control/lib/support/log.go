@@ -25,9 +25,10 @@ import (
 const (
 	dmgSystemLogFolder = "DmgSystemLog"     // Copy the dmg command output for DAOS system
 	dmgNodeLogFolder   = "DmgNodeLog"       // Copy the dmg command output specific to the storage.
-	daosAgentNodeLog   = "daosAgentNodeLog" // Copy the daos_agent command output specific to the node.
+	daosAgentNodeLog   = "DaosAgentNodeLog" // Copy the daos_agent command output specific to the node.
 	systemInfo         = "SysInfo"          // Copy the system related information
 	serverLogs         = "ServerLogs"       // Copy the server/conrol and helper logs
+	clientLogs         = "ClientLogs"       // Copy the server/conrol and helper logs
 	daosConfig         = "ServerConfig"     // Copy the server config
 )
 
@@ -272,7 +273,7 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 		return err
 	}
 
-	// Collect daos_agent logs
+	// Collect daos_agent command output
 	agentNodeLocation := filepath.Join(targetLocation, daosAgentNodeLog)
 	err = createFolder(agentNodeLocation, log)
 	if err != nil && opts[0].Continue == false {
@@ -282,6 +283,23 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 		_, err = cpOutputToFile(agentCommand, agentNodeLocation, log)
 		if err != nil && opts[0].Continue == false {
 			return err
+		}
+	}
+
+	// Collect client side log
+	clientLogFile := os.Getenv("D_LOG_FILE")
+	if clientLogFile != "" {
+		clientLogLocation := filepath.Join(targetLocation, clientLogs)
+		err = createFolder(clientLogLocation, log)
+		if err != nil && opts[0].Continue == false {
+			return err
+		}
+		matches, _ := filepath.Glob(clientLogFile + "*")
+		for _, logfile := range matches {
+			err := cpFile(logfile, clientLogLocation, log)
+			if err != nil && opts[0].Continue == false {
+				return err
+			}
 		}
 	}
 

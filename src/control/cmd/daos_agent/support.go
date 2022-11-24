@@ -25,7 +25,7 @@ type collectLogCmd struct {
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_logs"
+		cmd.TargetFolder = "/tmp/daos_support_client_logs"
 	}
 
 	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
