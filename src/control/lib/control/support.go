@@ -49,7 +49,9 @@ type (
 	CollectLogReq struct {
 		unaryRequest
 		TargetFolder string
-		Continue     bool
+		Stop         bool
+		CustomLogs   string
+		JsonOutput   bool
 	}
 
 	// CollectLogResp contains the results of a network scan.
@@ -67,7 +69,9 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).CollectLog(ctx, &ctlpb.CollectLogReq{
 			TargetFolder: req.TargetFolder,
-			Continue:     req.Continue,
+			Stop:         req.Stop,
+			CustomLogs:   req.CustomLogs,
+			JsonOutput:   req.JsonOutput,
 		})
 	})
 

@@ -28,9 +28,10 @@ type collectLogCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Continue     bool   `short:"c" long:"Continue" description:"Continue collecting logs and ignore any errors"`
-	TargetFolder string `short:"s" long:"loglocation" description:"Folder location where log is going to be copied"`
+	Stop         bool   `short:"s" long:"stop" description:"Stop the collectlog command on very first error"`
+	TargetFolder string `short:"t" long:"target" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
+	CustomLogs   string `short:"c" long:"custom" description:"Collect the Logs from given directory"`
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
@@ -45,41 +46,33 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
-		Continue:     cmd.Continue,
+		Stop:         cmd.Stop,
+		CustomLogs:   cmd.CustomLogs,
+		JsonOutput:   cmd.jsonOutputEnabled(),
 	}
-
-	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
 
 	req.SetHostList(cmd.hostlist)
 
 	resp, err := control.CollectLog(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if err != nil && cmd.Stop == true {
 		return err
 	}
 
 	params := support.Params{}
 	params.Hostlist = strings.Join(cmd.hostlist, " ")
-	params.Continue = cmd.Continue
+	params.Stop = cmd.Stop
 	params.TargetFolder = cmd.TargetFolder
 	params.Config = cmd.cfgCmd.config.Path
+	params.JsonOutput = cmd.jsonOutputEnabled()
 
 	err = support.CollectDmgSysteminfo(cmd.Logger, params)
-	if err != nil && cmd.Continue == false {
+	if err != nil && cmd.Stop == true {
 		return err
 	}
 
 	err = support.CollectDmgNodeinfo(cmd.Logger, params)
-	if err != nil && cmd.Continue == false {
+	if err != nil && cmd.Stop == true {
 		return err
 	}
 
@@ -88,6 +81,21 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		if err != nil {
 			return err
 		}
+
+		err = os.RemoveAll(params.TargetFolder)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
 	}
 
 	cmd.Info(bld.String())
