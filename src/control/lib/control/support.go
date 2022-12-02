@@ -45,7 +45,7 @@ var SysInfoCmd = [...]string{
 }
 
 type (
-	// CollectLogReq contains the parameters for a network scan request.
+	// CollectLogReq contains the parameters for a collectlog request.
 	CollectLogReq struct {
 		unaryRequest
 		TargetFolder string
@@ -54,7 +54,7 @@ type (
 		JsonOutput   bool
 	}
 
-	// CollectLogResp contains the results of a network scan.
+	// CollectLogResp contains the results of a collectlog
 	CollectLogResp struct {
 		HostErrorsResp
 	}

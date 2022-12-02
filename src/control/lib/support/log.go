@@ -175,6 +175,8 @@ func ArchiveLogs(log logging.Logger, opts ...Params) error {
 	if err != nil && opts[0].Stop == true {
 		return err
 	}
+	defer fileToWrite.Close()
+
 	_, err = io.Copy(fileToWrite, &buf)
 	if err != nil && opts[0].Stop == true {
 		return err
@@ -200,7 +202,7 @@ func CollectDmgSysteminfo(log logging.Logger, opts ...Params) error {
 		}
 
 		_, err = cpOutputToFile(targetDmgLog, log, dmg)
-		if err != nil {
+		if err != nil && opts[0].Stop == true {
 			return err
 		}
 	}
@@ -250,6 +252,23 @@ func getSysNameFromQuery(configPath string, log logging.Logger) []string {
 	return hostName
 }
 
+func CollectCustomLogs(targetLocation string, log logging.Logger, opts ...Params) error {
+	log.Infof("Log will be collected from custome location %s", opts[0].CustomLogs)
+
+	customeLogFolder := filepath.Join(targetLocation, customLogs)
+	err := createFolder(customeLogFolder, log)
+	if err != nil && opts[0].Stop == true {
+		return err
+	}
+
+	err = common.CpDir(opts[0].CustomLogs, customeLogFolder)
+	if err != nil && opts[0].Stop == true {
+		return err
+	}
+
+	return nil
+}
+
 func CollectDmgNodeinfo(log logging.Logger, opts ...Params) error {
 	// Get the Hostlist
 	var hostNames []string
@@ -286,7 +305,7 @@ func CollectDmgNodeinfo(log logging.Logger, opts ...Params) error {
 				health := copy{}
 				health.Cmd = strings.Join([]string{control.DmgDeviceHealthCmd, "-u", device}, " ")
 				health.Options = strings.Join([]string{"-l", hostName, "-o", opts[0].Config}, " ")
-				output, err = cpOutputToFile(targetDmgLog, log, health)
+				_, err = cpOutputToFile(targetDmgLog, log, health)
 				if err != nil && opts[0].Stop == true {
 					return err
 				}
@@ -335,21 +354,12 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 		}
 	}
 
-	return nil
-}
-
-func CollectCustomLogs(targetLocation string, log logging.Logger, opts ...Params) error {
-	log.Infof("Log will be collected from custome location %s", opts[0].CustomLogs)
-
-	customeLogFolder := filepath.Join(targetLocation, customLogs)
-	err := createFolder(customeLogFolder, log)
-	if err != nil && opts[0].Stop == true {
-		return err
-	}
-
-	err = common.CpDir(opts[0].CustomLogs, customeLogFolder)
-	if err != nil && opts[0].Stop == true {
-		return err
+	// Copy the custome log location
+	if opts[0].CustomLogs != "" {
+		err := CollectCustomLogs(targetLocation, log, opts...)
+		if err != nil && opts[0].Stop == true {
+			return err
+		}
 	}
 
 	return nil

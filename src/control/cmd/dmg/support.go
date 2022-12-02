@@ -31,7 +31,7 @@ type collectLogCmd struct {
 	Stop         bool   `short:"s" long:"stop" description:"Stop the collectlog command on very first error"`
 	TargetFolder string `short:"t" long:"target" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
-	CustomLogs   string `short:"c" long:"custom" description:"Collect the Logs from given directory"`
+	CustomLogs   string `short:"c" long:"custom-logs" description:"Collect the Logs from given directory"`
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {

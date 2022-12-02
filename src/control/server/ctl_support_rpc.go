@@ -19,7 +19,6 @@ import (
 // CollectLog retrieves details of network interfaces on remote hosts.
 func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogReq) (*ctlpb.CollectLogResp, error) {
 	c.log.Infof("CollectLog: Log Target location is %s", req.TargetFolder)
-	c.log.Infof("CollectLog: JsonOutput is", req.JsonOutput)
 
 	params := support.Params{}
 	params.Stop = req.Stop
