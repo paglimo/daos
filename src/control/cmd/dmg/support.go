@@ -13,8 +13,13 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/support"
+	//"github.com/daos-stack/daos/src/control/lib/support"
 )
+
+// var serverLogFunction = map[string]string{
+// 	"CopyServerConfig": "",
+// 	//"CollectSystemLog": control.SysInfoCmd,
+//  }
 
 // NetCmd is the struct representing the top-level network subcommand.
 type SupportCmd struct {
@@ -34,6 +39,21 @@ type collectLogCmd struct {
 	CustomLogs   string `short:"c" long:"custom-logs" description:"Collect the Logs from given directory"`
 }
 
+type collectLogFunctions struct {
+	logfunc string
+}
+
+var LogCollection = map[collectLogFunctions][]string{
+	{"CopyServerConfig"}: {"",},
+	{"CollectSystemLog"}: {
+		"iperf3 --help",
+		"daos_server version",
+		"dmesg",
+		"lspci -D",
+		"top -bcn1 -w512",
+	},
+}
+
 func (cmd *collectLogCmd) Execute(_ []string) error {
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
@@ -44,60 +64,62 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	ctx := context.Background()
-	req := &control.CollectLogReq{
-		TargetFolder: cmd.TargetFolder,
-		Stop:         cmd.Stop,
-		CustomLogs:   cmd.CustomLogs,
-		JsonOutput:   cmd.jsonOutputEnabled(),
-	}
-
-	req.SetHostList(cmd.hostlist)
-
-	resp, err := control.CollectLog(ctx, cmd.ctlInvoker, req)
-
-	if err != nil && cmd.Stop == true {
-		return err
-	}
-
-	params := support.Params{}
-	params.Hostlist = strings.Join(cmd.hostlist, " ")
-	params.Stop = cmd.Stop
-	params.TargetFolder = cmd.TargetFolder
-	params.Config = cmd.cfgCmd.config.Path
-	params.JsonOutput = cmd.jsonOutputEnabled()
-
-	err = support.CollectDmgSysteminfo(cmd.Logger, params)
-	if err != nil && cmd.Stop == true {
-		return err
-	}
-
-	err = support.CollectDmgNodeinfo(cmd.Logger, params)
-	if err != nil && cmd.Stop == true {
-		return err
-	}
-
-	if cmd.Archive == true {
-		err = support.ArchiveLogs(cmd.Logger, params)
-		if err != nil {
-			return err
+	for funt, logcmdset := range LogCollection {
+		for _, logcmd := range logcmdset {
+			req := &control.CollectLogReq{
+				TargetFolder: cmd.TargetFolder,
+				Stop:         cmd.Stop,
+				CustomLogs:   cmd.CustomLogs,
+				JsonOutput:   cmd.jsonOutputEnabled(),
+				LogFunction:  funt.logfunc,
+				LogCmd:   	  logcmd,
+			}
+			req.SetHostList(cmd.hostlist)
+			resp, err := control.CollectLog(ctx, cmd.ctlInvoker, req)
+			if err != nil && cmd.Stop == true {
+				return err
+			}
+			if len(resp.GetHostErrors()) > 0 {
+				var bld strings.Builder
+				_ = pretty.PrintResponseErrors(resp, &bld)
+				cmd.Info(bld.String())
+				if  cmd.Stop == true {
+					return resp.Errors()
+				}
+			}
 		}
-
-		err = os.RemoveAll(params.TargetFolder)
-		if err != nil {
-			return err
-		}
-
 	}
 
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
-		return err
-	}
+	// params := support.Params{}
+	// params.Hostlist = strings.Join(cmd.hostlist, " ")
+	// params.Stop = cmd.Stop
+	// params.TargetFolder = cmd.TargetFolder
+	// params.Config = cmd.cfgCmd.config.Path
+	// params.JsonOutput = cmd.jsonOutputEnabled()
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
+	// err = support.CollectDmgSysteminfo(cmd.Logger, params)
+	// if err != nil && cmd.Stop == true {
+	// 	return err
+	// }
 
-	cmd.Info(bld.String())
-	return resp.Errors()
+	// err = support.CollectDmgNodeinfo(cmd.Logger, params)
+	// if err != nil && cmd.Stop == true {
+	// 	return err
+	// }
+
+	// if cmd.Archive == true {
+	// 	err = support.ArchiveLogs(cmd.Logger, params)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// 	err = os.RemoveAll(params.TargetFolder)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// }
+
+	// return resp.Errors()
+	return nil
 }

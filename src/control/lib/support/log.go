@@ -40,6 +40,9 @@ type Params struct {
 	TargetFolder string
 	CustomLogs   string
 	JsonOutput   bool
+	LogFunction  string 
+	LogCmd     	 string
+	Options 	 string
 }
 
 type copy struct {
@@ -47,32 +50,43 @@ type copy struct {
 	Options string
 }
 
-func getRunningConf(log logging.Logger) (string, bool) {
+func checkEngineState(log logging.Logger) bool {
 	_, err := exec.Command("bash", "-c", "pidof daos_engine").Output()
 	if err != nil {
 		log.Info("daos_engine is not running on server")
-		return "", false
+		return false
 	}
 
-	cmd := "ps -eo args | grep daos_engine | head -n 1 | grep -oP '(?<=-d )[^ ]*'"
-	stdout, err := exec.Command("bash", "-c", cmd).Output()
-	running_config := filepath.Join(strings.TrimSpace(string(stdout)), config.ConfigOut)
-
-	return running_config, true
+	return true
 }
 
-func getServerConf(log logging.Logger) (string, bool) {
-	conf, err := getRunningConf(log)
-
-	if err == true {
-		return conf, err
+func getRunningConf(log logging.Logger) (string, error) {
+	running_config := ""
+	if checkEngineState(log) == true {
+		cmd := "ps -eo args | grep daos_engine | head -n 1 | grep -oP '(?<=-d )[^ ]*'"
+		stdout, err := exec.Command("bash", "-c", cmd).Output()
+		if err != nil {
+			return "", err
+		}
+		running_config = filepath.Join(strings.TrimSpace(string(stdout)), config.ConfigOut)
 	}
 
-	// Return the default config
-	serverConfig := config.DefaultServer()
-	default_path := filepath.Join(serverConfig.SocketDir, config.ConfigOut)
+	return running_config, nil
+}
 
-	return default_path, err
+func getServerConf(log logging.Logger, opts ...Params) (string, error) {
+	cfgPath, err := getRunningConf(log)
+
+	if err != nil {
+		return "", err
+	}
+
+	if cfgPath == "" {
+		cfgPath = filepath.Join(config.DefaultServer().SocketDir, config.ConfigOut)
+	}
+
+	log.Debugf(" -- Server Config File is %s", cfgPath)	
+	return cfgPath, nil
 }
 
 func cpFile(src, dst string, log logging.Logger) error {
@@ -108,23 +122,6 @@ func IsHidden(filename string) bool {
 		return false
 	}
 	return false
-}
-
-func CopyServerConfig(src, dst string, log logging.Logger) error {
-	err := cpFile(src, dst, log)
-	if err != nil {
-		return err
-	}
-
-	// Rename the file if it's hidden
-	result := IsHidden(filepath.Base(src))
-	if result == true {
-		hiddenConf := filepath.Join(dst, filepath.Base(src))
-		nonhiddenConf := filepath.Join(dst, filepath.Base(src)[1:])
-		os.Rename(hiddenConf, nonhiddenConf)
-	}
-
-	return nil
 }
 
 func createFolder(target string, log logging.Logger) error {
@@ -186,7 +183,7 @@ func ArchiveLogs(log logging.Logger, opts ...Params) error {
 }
 
 func CollectDmgSysteminfo(log logging.Logger, opts ...Params) error {
-	log.Debug("Collecting Dmg Ouput")
+	// log.Debug("Collecting Dmg Ouput")
 	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogFolder)
 	err := createFolder(targetDmgLog, log)
 	if err != nil {
@@ -365,9 +362,68 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+func CollectSystemLog(log logging.Logger, opts ...Params) error {
+	
+	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
+	if err != nil {
+		return err
+	}
+
+	// Collect system related information
+	targetSysinfo := filepath.Join(targetLocation, systemInfo)
+	err = createFolder(targetSysinfo, log)
+	if err != nil {
+		return err
+	}
+
+	system := copy{}
+	system.Cmd = opts[0].LogCmd
+	_, err = cpOutputToFile(targetSysinfo, log, system)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func CopyServerConfig(log logging.Logger, opts ...Params) error {
+	cfgPath, err := getServerConf(log,  opts...)
+
+	serverConfig := config.DefaultServer()
+	serverConfig.SetPath(cfgPath)
+	serverConfig.Load()
+	// Create the individual folder on each server
+	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
+	if err != nil {
+		return err
+	}
+
+	// Copy server config file
+	targetConfig := filepath.Join(targetLocation, daosConfig)
+	err = createFolder(targetConfig, log)
+	if err != nil {
+		return err
+	}
+
+	err = cpFile(cfgPath, targetConfig, log)
+	if err != nil {
+		return err
+	}
+
+	// Rename the file if it's hidden
+	result := IsHidden(filepath.Base(cfgPath))
+	if result == true {
+		hiddenConf := filepath.Join(targetConfig, filepath.Base(cfgPath))
+		nonhiddenConf := filepath.Join(targetConfig, filepath.Base(cfgPath)[1:])
+		os.Rename(hiddenConf, nonhiddenConf)
+	}
+
+	return nil
+}
+
 func CollectServerLog(log logging.Logger, opts ...Params) error {
 	// Get the running daos_engine state and config from running process
-	cfgPath, serverRunning := getServerConf(log)
+	cfgPath, _ := getServerConf(log)
 	serverConfig := config.DefaultServer()
 	stopOnFailure := false
 
@@ -396,17 +452,6 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 		if err != nil && stopOnFailure == true {
 			return err
 		}
-	}
-
-	// Copy server config file
-	targetConfig := filepath.Join(targetLocation, daosConfig)
-	err = createFolder(targetConfig, log)
-	if err != nil && stopOnFailure == true {
-		return err
-	}
-	err = CopyServerConfig(cfgPath, targetConfig, log)
-	if err != nil && stopOnFailure == true {
-		return err
 	}
 
 	// Copy all the log files for each engine
@@ -446,7 +491,7 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 
 	// Copy daos_metrics log if server is still running
 	daos := copy{}
-	if serverRunning == true {
+	if checkEngineState(log) == true {
 		for i := range serverConfig.Engines {
 			engineId := fmt.Sprintf("%d", i)
 			daos.Cmd = strings.Join([]string{"daos_metrics", "-S", engineId}, " ")
@@ -471,22 +516,17 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 	}
 	defer f.Close()
 	hardware.PrintTopology(topo, f)
+	
+	return nil
+}
 
-	// Collect system related information
-	targetSysinfo := filepath.Join(targetLocation, systemInfo)
-	err = createFolder(targetSysinfo, log)
-	if err != nil && stopOnFailure == true {
-		return err
-	}
-
-	system := copy{}
-	for _, system.Cmd = range control.SysInfoCmd {
-		_, err = cpOutputToFile(targetSysinfo, log, system)
-		if err != nil && stopOnFailure == true {
-			return err
-		}
+func CollectSupportLog (log logging.Logger, opts ...Params) error {
+	switch  opts[0].LogFunction {
+	case "CopyServerConfig":
+		return CopyServerConfig(log , opts ...)
+	case "CollectSystemLog":
+		return CollectSystemLog(log , opts ...)
 	}
 
 	return nil
-
 }

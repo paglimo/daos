@@ -7,26 +7,25 @@
 package server
 
 import (
-	// "os"
-	// "path/filepath"
-
 	"golang.org/x/net/context"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
-// CollectLog retrieves details of network interfaces on remote hosts.
+// CollectLog collect the file for each server on given target location.
 func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogReq) (*ctlpb.CollectLogResp, error) {
-	c.log.Infof("CollectLog: Log Target location is %s", req.TargetFolder)
+	c.log.Debugf("CollectLog: Log Target location is %s", req.TargetFolder)
 
 	params := support.Params{}
 	params.Stop = req.Stop
 	params.TargetFolder = req.TargetFolder
 	params.CustomLogs = req.CustomLogs
 	params.JsonOutput = req.JsonOutput
+	params.LogFunction = req.LogFunction
+	params.LogCmd = req.LogCmd
 
-	err := support.CollectServerLog(c.log, params)
+	err := support.CollectSupportLog(c.log, params)
 	if err != nil {
 		return nil, err
 	}

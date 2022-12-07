@@ -38,7 +38,8 @@ var DasoAgnetInfoCmd = [...]string{
 }
 
 var SysInfoCmd = [...]string{
-	"daos_server version",
+	"iperf3 --help",
+	"daos_server version",	
 	"dmesg",
 	"lspci -D",
 	"top -bcn1 -w512",
@@ -52,6 +53,8 @@ type (
 		Stop         bool
 		CustomLogs   string
 		JsonOutput   bool
+		LogFunction  string
+		LogCmd		 string
 	}
 
 	// CollectLogResp contains the results of a collectlog
@@ -72,6 +75,8 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 			Stop:         req.Stop,
 			CustomLogs:   req.CustomLogs,
 			JsonOutput:   req.JsonOutput,
+			LogFunction:  req.LogFunction,
+			LogCmd:		  req.LogCmd,
 		})
 	})
 
@@ -80,15 +85,16 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 		return nil, err
 	}
 
-	nsr := new(CollectLogResp)
+	scr := new(CollectLogResp)
 	for _, hostResp := range ur.Responses {
-		if hostResp.Error != nil {
-			if err := nsr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+		 if hostResp.Error != nil {
+			if err := scr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
 			continue
-		}
+		 }
+
 	}
 
-	return nsr, nil
+	return scr, nil
 }
