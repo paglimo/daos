@@ -18,7 +18,6 @@ func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogRe
 	c.log.Debugf("CollectLog: Log Target location is %s", req.TargetFolder)
 
 	params := support.Params{}
-	params.Stop = req.Stop
 	params.TargetFolder = req.TargetFolder
 	params.CustomLogs = req.CustomLogs
 	params.JsonOutput = req.JsonOutput

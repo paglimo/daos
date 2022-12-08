@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
@@ -28,32 +29,48 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	var LogCollection = map[string][]string{
+		"CollectAgnetCmd":  support.AgnetCmd,
+		"CollectClientLog": {""},
+		"CollectSystemCmd": support.SystemCmd,
+	}
+
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_client_logs"
 	}
+	// Copy the custome log location
+	if cmd.CustomLogs != "" {
+		LogCollection["CollectCustomLogs"] = []string{""}
+	}
 
 	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
-	cmd.Infof("Agent Config %s", cmd.cfg.LogFile)
 
 	params := support.Params{}
-	params.Stop = cmd.Stop
 	params.TargetFolder = cmd.TargetFolder
 	params.CustomLogs = cmd.CustomLogs
+	for logfunc, logcmdset := range LogCollection {
+		for _, logcmd := range logcmdset {
+			params.LogFunction = logfunc
+			params.LogCmd = logcmd
 
-	err := support.CollectClientLog(cmd.Logger, params)
-	if err != nil {
-		return err
+			err := support.CollectSupportLog(cmd.Logger, params)
+			if err != nil {
+				fmt.Println(err)
+				if cmd.Stop == true {
+					return err
+				}
+			}
+		}
 	}
 
 	if cmd.Archive == true {
-		err = support.ArchiveLogs(cmd.Logger, params)
+		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err
 		}
 
-		err = os.RemoveAll(params.TargetFolder)
-		if err != nil {
-			return err
+		for i := 1; i < 3; i++ {
+			os.RemoveAll(cmd.TargetFolder)
 		}
 	}
 

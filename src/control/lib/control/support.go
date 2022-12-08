@@ -14,47 +14,15 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
-var DmgLogCollectCmd = [...]string{
-	"dmg system get-prop",
-	"dmg system query",
-	"dmg system list-pools",
-	"dmg system leader-query",
-	"dmg system get-attr",
-	"dmg network scan",
-	"dmg storage scan",
-	"dmg storage scan -n",
-	"dmg storage scan -m",
-	"dmg storage query list-pools -v",
-	"dmg storage query usage",
-}
-
-const DmgListDeviceCmd = "dmg storage query list-devices"
-const DmgDeviceHealthCmd = "dmg storage query device-health"
-
-var DasoAgnetInfoCmd = [...]string{
-	"daos_agent version",
-	"daos_agent net-scan",
-	"daos_agent dump-topology",
-}
-
-var SysInfoCmd = [...]string{
-	"iperf3 --help",
-	"daos_server version",	
-	"dmesg",
-	"lspci -D",
-	"top -bcn1 -w512",
-}
-
 type (
 	// CollectLogReq contains the parameters for a collectlog request.
 	CollectLogReq struct {
 		unaryRequest
 		TargetFolder string
-		Stop         bool
 		CustomLogs   string
 		JsonOutput   bool
 		LogFunction  string
-		LogCmd		 string
+		LogCmd       string
 	}
 
 	// CollectLogResp contains the results of a collectlog
@@ -72,11 +40,10 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).CollectLog(ctx, &ctlpb.CollectLogReq{
 			TargetFolder: req.TargetFolder,
-			Stop:         req.Stop,
 			CustomLogs:   req.CustomLogs,
 			JsonOutput:   req.JsonOutput,
 			LogFunction:  req.LogFunction,
-			LogCmd:		  req.LogCmd,
+			LogCmd:       req.LogCmd,
 		})
 	})
 
@@ -87,12 +54,12 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 
 	scr := new(CollectLogResp)
 	for _, hostResp := range ur.Responses {
-		 if hostResp.Error != nil {
+		if hostResp.Error != nil {
 			if err := scr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
 			continue
-		 }
+		}
 
 	}
 

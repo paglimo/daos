@@ -11,11 +11,10 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 
 message CollectLogReq {
   string TargetFolder = 1;
-  bool Stop = 2;
-  string CustomLogs = 3;  
-  bool JsonOutput = 4;
-  string LogFunction = 5;
-  string LogCmd = 6;
+  string CustomLogs = 2;
+  bool JsonOutput = 3;
+  string LogFunction = 4;
+  string LogCmd = 5;
 }
 
 message CollectLogResp {
