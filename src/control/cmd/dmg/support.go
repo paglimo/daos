@@ -36,16 +36,17 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
+	if cmd.TargetFolder == "" {
+		cmd.TargetFolder = "/tmp/daos_support_server_logs"
+	}
+	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
+
+	hostName, _ := support.GetHostName()
 	var LogCollection = map[string][]string{
 		"CopyServerConfig":     {""},
 		"CollectSystemCmd":     support.SystemCmd,
 		"CollectServerLog":     support.ServerLog,
 		"CollectDaosServerCmd": support.DaosServerCmd,
-	}
-
-	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
 
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
@@ -57,9 +58,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		LogCollection["CollectCustomLogs"] = []string{""}
 	}
 
-	ctx := context.Background()
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
+			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
+			ctx := context.Background()
 			req := &control.CollectLogReq{
 				TargetFolder: cmd.TargetFolder,
 				CustomLogs:   cmd.CustomLogs,
@@ -83,7 +85,28 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	var DmgLogCollect = map[string][]string{
+	// Rsync the logs from servers
+	req := &control.CollectLogReq{
+		TargetFolder: cmd.TargetFolder,
+		LogFunction:  "rsyncLog",
+		LogCmd:       hostName,
+	}
+	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
+	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
+	if err != nil && cmd.Stop == true {
+		return err
+	}
+	if len(resp.GetHostErrors()) > 0 {
+		var bld strings.Builder
+		_ = pretty.PrintResponseErrors(resp, &bld)
+		cmd.Info(bld.String())
+		if cmd.Stop == true {
+			return resp.Errors()
+		}
+	}
+
+	// Collect dmg command output
+	var DmgInfoCollection = map[string][]string{
 		"CollectDmgCmd":      support.DmgCmd,
 		"CollectDmgDiskInfo": {""},
 	}
@@ -92,7 +115,8 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
 	params.CustomLogs = cmd.CustomLogs
-	for logfunc, logcmdset := range DmgLogCollect {
+	params.Hostlist = strings.Join(cmd.hostlist, " ")
+	for logfunc, logcmdset := range DmgInfoCollection {
 		for _, logcmd := range logcmdset {
 			params.LogFunction = logfunc
 			params.LogCmd = logcmd
@@ -108,6 +132,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	if cmd.Archive == true {
+		cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err

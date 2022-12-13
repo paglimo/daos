@@ -15,7 +15,7 @@ import (
 
 // CollectLog collect the file for each server on given target location.
 func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogReq) (*ctlpb.CollectLogResp, error) {
-	c.log.Debugf("CollectLog: Log Target location is %s", req.TargetFolder)
+	c.log.Infof("Support CollectLog: Calling Log Function: %s, For Cmd/Log: %s", req.LogFunction, req.LogCmd)
 
 	params := support.Params{}
 	params.TargetFolder = req.TargetFolder

@@ -30,6 +30,11 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	if cmd.TargetFolder == "" {
+		cmd.TargetFolder = "/tmp/daos_support_server_logs"
+	}
+	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
+
 	var LogCollection = map[string][]string{
 		"CopyServerConfig":     {""},
 		"CollectSystemCmd":     support.SystemCmd,
@@ -37,15 +42,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		"CollectDaosServerCmd": support.DaosServerCmd,
 	}
 
-	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_server_logs"
-	}
 	// Copy the custome log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
 	}
-
-	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
 
 	params := support.Params{}
 	params.Config = cmd.configPath()
@@ -53,6 +53,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.CustomLogs = cmd.CustomLogs
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
+			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
 			params.LogFunction = logfunc
 			params.LogCmd = logcmd
 
@@ -67,6 +68,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	if cmd.Archive == true {
+		cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err

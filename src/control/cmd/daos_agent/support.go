@@ -29,27 +29,28 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	if cmd.TargetFolder == "" {
+		cmd.TargetFolder = "/tmp/daos_support_client_logs"
+	}
+	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
+
 	var LogCollection = map[string][]string{
 		"CollectAgnetCmd":  support.AgnetCmd,
 		"CollectClientLog": {""},
 		"CollectSystemCmd": support.SystemCmd,
 	}
 
-	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_client_logs"
-	}
 	// Copy the custome log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
 	}
-
-	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
 
 	params := support.Params{}
 	params.TargetFolder = cmd.TargetFolder
 	params.CustomLogs = cmd.CustomLogs
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
+			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
 			params.LogFunction = logfunc
 			params.LogCmd = logcmd
 
@@ -64,6 +65,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	if cmd.Archive == true {
+		cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err

@@ -57,7 +57,6 @@ var AgnetCmd = []string{
 
 var SystemCmd = []string{
 	"iperf3 --help",
-	"daos_server version",
 	"dmesg",
 	"lspci -D",
 	"top -bcn1 -w512",
@@ -70,6 +69,7 @@ var ServerLog = []string{
 }
 
 var DaosServerCmd = []string{
+	"daos_server version",
 	"daos_metrics",
 	"dump-topology",
 }
@@ -90,23 +90,27 @@ type copy struct {
 	Options string
 }
 
-func checkEngineState(log logging.Logger) bool {
+func checkEngineState(log logging.Logger) (bool, error) {
 	_, err := exec.Command("bash", "-c", "pidof daos_engine").Output()
 	if err != nil {
-		log.Debug("daos_engine is not running on server")
-		return false
+		return false, errors.Wrap(err, "daos_engine is not running on server")
 	}
 
-	return true
+	return true, nil
 }
 
 func getRunningConf(log logging.Logger) (string, error) {
 	running_config := ""
-	if checkEngineState(log) == true {
+	runState, err := checkEngineState(log)
+	if err != nil {
+		return "", err
+	}
+
+	if runState {
 		cmd := "ps -eo args | grep daos_engine | head -n 1 | grep -oP '(?<=-d )[^ ]*'"
 		stdout, err := exec.Command("bash", "-c", cmd).Output()
 		if err != nil {
-			return "", err
+			return "", errors.Wrap(err, "daos_engine is not running on server")
 		}
 		running_config = filepath.Join(strings.TrimSpace(string(stdout)), config.ConfigOut)
 	}
@@ -129,45 +133,22 @@ func getServerConf(log logging.Logger, opts ...Params) (string, error) {
 	return cfgPath, nil
 }
 
-func cpFile(src, dst string, log logging.Logger) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
+func cpLogFile(src, dst string, log logging.Logger) error {
 	log_file_name := filepath.Base(src)
-
 	log.Debugf(" -- Copy File %s to %s\n", log_file_name, dst)
 
-	out, err := os.Create(filepath.Join(dst, log_file_name))
+	err := common.CpFile(src, filepath.Join(dst, log_file_name))
 	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
+		return errors.Wrap(err, "unable to Copy File")
 	}
 
 	return nil
 }
 
-// Check if file or directory that starts with . which is hidden
-func IsHidden(filename string) bool {
-	if filename[0:1] == "." {
-		return true
-	} else {
-		return false
-	}
-	return false
-}
-
 func createFolder(target string, log logging.Logger) error {
 	// Create the folder if it's not exist
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		log.Debugf("Log folder is not Exists, so creating folder %s", target)
+		log.Debugf("Log folder is not Exists, so creating %s", target)
 
 		if err := os.MkdirAll(target, 0700); err != nil && !os.IsExist(err) {
 			return errors.Wrapf(err, "failed to create log directory %s", target)
@@ -177,7 +158,7 @@ func createFolder(target string, log logging.Logger) error {
 	return nil
 }
 
-func getHostName() (string, error) {
+func GetHostName() (string, error) {
 	hn, err := exec.Command("hostname", "-s").Output()
 	if err != nil {
 		return "", errors.Wrapf(err, "Error running hostname -s command %s", hn)
@@ -197,7 +178,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...copy) (string, erro
 		return "", errors.Wrapf(err, "Error running command %s with %s", runCmd, out)
 	}
 
-	log.Debugf("-- SUCCESS -- %s > %s ", runCmd, target)
+	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, target)
 	cmd := strings.ReplaceAll(cp[0].Cmd, " -", "_")
 	cmd = strings.ReplaceAll(cmd, " ", "_")
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
@@ -234,7 +215,7 @@ func ArchiveLogs(log logging.Logger, opts ...Params) error {
 
 func createHostFolder(dst string, log logging.Logger) (string, error) {
 	// Create the individual folder on each server
-	hn, err := getHostName()
+	hn, err := GetHostName()
 	if err != nil {
 		return "", err
 	}
@@ -248,35 +229,83 @@ func createHostFolder(dst string, log logging.Logger) (string, error) {
 	return targetLocation, nil
 }
 
-func getSysNameFromQuery(configPath string, log logging.Logger) []string {
-	var hostName []string
+func createHostLogFolder(dst string, log logging.Logger, opts ...Params) (string, error) {
+	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
+	if err != nil {
+		return "", err
+	}
+
+	targetDst := filepath.Join(targetLocation, dst)
+	err = createFolder(targetDst, log)
+	if err != nil {
+		return "", err
+	}
+
+	return targetDst, nil
+
+}
+
+func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error) {
+	var hostNames []string
 
 	dName, err := exec.Command("sh", "-c", "domainname").Output()
 	if err != nil {
-		err = errors.Wrapf(err, "Error running command domainname with %s", dName)
+		return nil, errors.Wrapf(err, "Error running command domainname with %s", dName)
 	}
 	domainName := strings.Split(string(dName), "\n")
 
 	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
-		err = errors.Wrapf(err, "Error running command %s with %s", cmd, out)
+		return nil, errors.Wrapf(err, "Error running command %s with %s", cmd, out)
 	}
 	temp := strings.Split(string(out), "\n")
 
-	for _, hn := range temp[2 : len(temp)-2] {
-		hn = strings.ReplaceAll(strings.Fields(hn)[3][1:], domainName[0], "")
-		hn = strings.TrimSuffix(hn, ".")
-		hostName = append(hostName, hn)
+	if len(temp) > 0 {
+		for _, hn := range temp[2 : len(temp)-2] {
+			hn = strings.ReplaceAll(strings.Fields(hn)[3][1:], domainName[0], "")
+			hn = strings.TrimSuffix(hn, ".")
+			hostNames = append(hostNames, hn)
+		}
+	} else {
+		return nil, errors.Wrapf(err, "No system found for command %s", cmd)
 	}
 
-	return hostName
+	return hostNames, nil
+}
+
+func rsyncLog(log logging.Logger, opts ...Params) error {
+	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
+	if err != nil {
+		return err
+	}
+
+	cmd := strings.Join([]string{
+		"rsync",
+		"-av",
+		"--blocking-io",
+		"--remove-source-files",
+		targetLocation,
+		opts[0].LogCmd + ":" + opts[0].TargetFolder}, " ")
+
+	rsyncCmd := exec.Command("sh", "-c", cmd)
+	var stdout, stderr bytes.Buffer
+	rsyncCmd.Stdout = &stdout
+	rsyncCmd.Stderr = &stderr
+	err = rsyncCmd.Run()
+	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+	if err != nil {
+		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
+	}
+	log.Infof("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
+
+	return nil
 }
 
 func CollectCustomLogs(log logging.Logger, opts ...Params) error {
 	log.Infof("Log will be collected from custome location %s", opts[0].CustomLogs)
 
-	hn, err := getHostName()
+	hn, err := GetHostName()
 	if err != nil {
 		return err
 	}
@@ -303,7 +332,11 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 	if len(opts[0].Hostlist) > 0 {
 		hostNames = strings.Fields(opts[0].Hostlist)
 	} else {
-		hostNames = getSysNameFromQuery(opts[0].Config, log)
+		hostNames, err := getSysNameFromQuery(opts[0].Config, log)
+		_ = hostNames
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, hostName := range hostNames {
@@ -342,22 +375,16 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
-func CollectAgnetCmd(log logging.Logger, opts ...Params) error {
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
-	if err != nil {
-		return err
-	}
-
+func CollectCmdOutput(folderName string, log logging.Logger, opts ...Params) error {
 	// Collect daos_agent command output
-	agentNodeLocation := filepath.Join(targetLocation, daosAgentCmdInfo)
-	err = createFolder(agentNodeLocation, log)
+	nodeLocation, err := createHostLogFolder(folderName, log, opts...)
 	if err != nil {
 		return err
 	}
 
 	agent := copy{}
 	agent.Cmd = opts[0].LogCmd
-	_, err = cpOutputToFile(agentNodeLocation, log, agent)
+	_, err = cpOutputToFile(nodeLocation, log, agent)
 	if err != nil {
 		return err
 	}
@@ -366,22 +393,17 @@ func CollectAgnetCmd(log logging.Logger, opts ...Params) error {
 }
 
 func CollectClientLog(log logging.Logger, opts ...Params) error {
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
-	if err != nil {
-		return err
-	}
-
 	// Collect client side log
 	clientLogFile := os.Getenv("D_LOG_FILE")
 	if clientLogFile != "" {
-		clientLogLocation := filepath.Join(targetLocation, clientLogs)
-		err = createFolder(clientLogLocation, log)
+		clientLogLocation, err := createHostLogFolder(clientLogs, log, opts...)
 		if err != nil {
 			return err
 		}
+
 		matches, _ := filepath.Glob(clientLogFile + "*")
 		for _, logfile := range matches {
-			err := cpFile(logfile, clientLogLocation, log)
+			err := cpLogFile(logfile, clientLogLocation, log)
 			if err != nil {
 				return err
 			}
@@ -392,7 +414,6 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 }
 
 func CollectDmgCmd(log logging.Logger, opts ...Params) error {
-	// log.Debug("Collecting Dmg Ouput")
 	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogFolder)
 	err := createFolder(targetDmgLog, log)
 	if err != nil {
@@ -415,30 +436,6 @@ func CollectDmgCmd(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
-func CollectSystemCmd(log logging.Logger, opts ...Params) error {
-
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
-	if err != nil {
-		return err
-	}
-
-	// Collect system related information
-	targetSysinfo := filepath.Join(targetLocation, systemInfo)
-	err = createFolder(targetSysinfo, log)
-	if err != nil {
-		return err
-	}
-
-	system := copy{}
-	system.Cmd = opts[0].LogCmd
-	_, err = cpOutputToFile(targetSysinfo, log, system)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func CopyServerConfig(log logging.Logger, opts ...Params) error {
 	cfgPath, err := getServerConf(log, opts...)
 
@@ -446,26 +443,19 @@ func CopyServerConfig(log logging.Logger, opts ...Params) error {
 	serverConfig.SetPath(cfgPath)
 	serverConfig.Load()
 	// Create the individual folder on each server
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
+	targetConfig, err := createHostLogFolder(daosConfig, log, opts...)
 	if err != nil {
 		return err
 	}
 
-	// Copy server config file
-	targetConfig := filepath.Join(targetLocation, daosConfig)
-	err = createFolder(targetConfig, log)
-	if err != nil {
-		return err
-	}
-
-	err = cpFile(cfgPath, targetConfig, log)
+	err = cpLogFile(cfgPath, targetConfig, log)
 	if err != nil {
 		return err
 	}
 
 	// Rename the file if it's hidden
-	result := IsHidden(filepath.Base(cfgPath))
-	if result == true {
+	result := common.IsHidden(filepath.Base(cfgPath))
+	if result {
 		hiddenConf := filepath.Join(targetConfig, filepath.Base(cfgPath))
 		nonhiddenConf := filepath.Join(targetConfig, filepath.Base(cfgPath)[1:])
 		os.Rename(hiddenConf, nonhiddenConf)
@@ -488,14 +478,7 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 	serverConfig.SetPath(cfgPath)
 	serverConfig.Load()
 
-	// Create the individual folder on each server
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
-	if err != nil {
-		return err
-	}
-
-	targetServerLogs := filepath.Join(targetLocation, serverLogs)
-	err = createFolder(targetServerLogs, log)
+	targetServerLogs, err := createHostLogFolder(serverLogs, log, opts...)
 	if err != nil {
 		return err
 	}
@@ -505,19 +488,19 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 		for i := range serverConfig.Engines {
 			matches, _ := filepath.Glob(serverConfig.Engines[i].LogFile + "*")
 			for _, logfile := range matches {
-				err = cpFile(logfile, targetServerLogs, log)
+				err = cpLogFile(logfile, targetServerLogs, log)
 				if err != nil {
 					return err
 				}
 			}
 		}
 	case "ControlLog":
-		err = cpFile(serverConfig.ControlLogFile, targetServerLogs, log)
+		err = cpLogFile(serverConfig.ControlLogFile, targetServerLogs, log)
 		if err != nil {
 			return err
 		}
 	case "HelperLog":
-		err = cpFile(serverConfig.HelperLogFile, targetServerLogs, log)
+		err = cpLogFile(serverConfig.HelperLogFile, targetServerLogs, log)
 		if err != nil {
 			return err
 		}
@@ -527,7 +510,12 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 }
 
 func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Params) error {
-	if checkEngineState(log) == true {
+	engineRunState, err := checkEngineState(log)
+	if err != nil {
+		return err
+	}
+
+	if engineRunState {
 		daos := copy{}
 		var cfgPath string
 		if opts[0].Config != "" {
@@ -556,15 +544,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Par
 }
 
 func CollectDaosServerCmd(log logging.Logger, opts ...Params) error {
-	// Create the individual folder on each server
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
-	if err != nil {
-		return err
-	}
-
-	// Create the dmg specific folder for each server
-	daosNodeLocation := filepath.Join(targetLocation, daosNodeLogFolder)
-	err = createFolder(daosNodeLocation, log)
+	daosNodeLocation, err := createHostLogFolder(daosNodeLogFolder, log, opts...)
 	if err != nil {
 		return err
 	}
@@ -598,7 +578,7 @@ func CollectSupportLog(log logging.Logger, opts ...Params) error {
 	case "CopyServerConfig":
 		return CopyServerConfig(log, opts...)
 	case "CollectSystemCmd":
-		return CollectSystemCmd(log, opts...)
+		return CollectCmdOutput(systemInfo, log, opts...)
 	case "CollectServerLog":
 		return CollectServerLog(log, opts...)
 	case "CollectCustomLogs":
@@ -610,9 +590,11 @@ func CollectSupportLog(log logging.Logger, opts ...Params) error {
 	case "CollectDmgDiskInfo":
 		return CollectDmgDiskInfo(log, opts...)
 	case "CollectAgnetCmd":
-		return CollectAgnetCmd(log, opts...)
+		return CollectCmdOutput(daosAgentCmdInfo, log, opts...)
 	case "CollectClientLog":
 		return CollectClientLog(log, opts...)
+	case "rsyncLog":
+		return rsyncLog(log, opts...)
 	}
 
 	return nil

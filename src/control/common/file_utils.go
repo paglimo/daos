@@ -319,3 +319,13 @@ func CpDir(source string, dest string) error {
 	}
 	return nil
 }
+
+// Check if file or directory that starts with . which is hidden
+func IsHidden(filename string) bool {
+	if filename[0:1] == "." {
+		return true
+	} else {
+		return false
+	}
+	return false
+}
