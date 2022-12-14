@@ -30,10 +30,17 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	// Default 4 steps of log/conf collection.
+	progress := support.ProgressBar{1, 4, 0, false}
+
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
+
+	if cmd.Archive == true {
+		progress.Total = progress.Total + 1
+	}
 
 	var LogCollection = map[string][]string{
 		"CopyServerConfig":     {""},
@@ -45,8 +52,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Copy the custome log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
+		progress.Total = progress.Total + 1
 	}
 
+	progress.Steps = 100 / progress.Total
 	params := support.Params{}
 	params.Config = cmd.configPath()
 	params.TargetFolder = cmd.TargetFolder
@@ -65,6 +74,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
+		support.PrintProgress(&progress)
 	}
 
 	if cmd.Archive == true {
@@ -78,6 +88,8 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			os.RemoveAll(cmd.TargetFolder)
 		}
 	}
+
+	support.PrintProgressEnd(&progress)
 
 	return nil
 }

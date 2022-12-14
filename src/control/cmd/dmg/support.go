@@ -36,6 +36,9 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	// Total 8 group of for dmg support collection
+	progress := support.ProgressBar{1, 8, 0, cmd.jsonOutputEnabled()}
+
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
@@ -56,7 +59,9 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Copy the custome log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
+		progress.Total = progress.Total + 1
 	}
+	progress.Steps = 100 / progress.Total
 
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
@@ -65,7 +70,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			req := &control.CollectLogReq{
 				TargetFolder: cmd.TargetFolder,
 				CustomLogs:   cmd.CustomLogs,
-				JsonOutput:   cmd.jsonOutputEnabled(),
 				LogFunction:  logfunc,
 				LogCmd:       logcmd,
 			}
@@ -83,6 +87,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
+		support.PrintProgress(&progress)
 	}
 
 	// Rsync the logs from servers
@@ -104,6 +109,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			return resp.Errors()
 		}
 	}
+	support.PrintProgress(&progress)
 
 	// Collect dmg command output
 	var DmgInfoCollection = map[string][]string{
@@ -115,6 +121,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
 	params.CustomLogs = cmd.CustomLogs
+	params.JsonOutput = cmd.jsonOutputEnabled()
 	params.Hostlist = strings.Join(cmd.hostlist, " ")
 	for logfunc, logcmdset := range DmgInfoCollection {
 		for _, logcmd := range logcmdset {
@@ -129,10 +136,11 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
+		support.PrintProgress(&progress)
 	}
 
 	if cmd.Archive == true {
-		cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
+		cmd.Infof("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err
@@ -142,6 +150,8 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			os.RemoveAll(cmd.TargetFolder)
 		}
 	}
+
+	support.PrintProgressEnd(&progress)
 
 	return nil
 }

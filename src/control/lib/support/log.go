@@ -74,6 +74,13 @@ var DaosServerCmd = []string{
 	"dump-topology",
 }
 
+type ProgressBar struct {
+	Start      int  // Bar start int number
+	Total      int  // Bar end int number
+	Steps      int  // Int number be increased per steps
+	JsonOutput bool // Json option check and skip progress bar if it's enabled
+}
+
 type Params struct {
 	Config       string
 	Hostlist     string
@@ -82,12 +89,24 @@ type Params struct {
 	JsonOutput   bool
 	LogFunction  string
 	LogCmd       string
-	Options      string
 }
 
 type copy struct {
 	Cmd     string
 	Options string
+}
+
+func PrintProgress(progBar *ProgressBar) {
+	if !(progBar.JsonOutput) {
+		fmt.Printf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
+		progBar.Start = progBar.Start + 1
+	}
+}
+
+func PrintProgressEnd(progBar *ProgressBar) {
+	if !(progBar.JsonOutput) {
+		fmt.Printf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), progBar.Total, progBar.Total)
+	}
 }
 
 func checkEngineState(log logging.Logger) (bool, error) {
@@ -329,14 +348,12 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 	var hostNames []string
 	var output string
 
+	hostNames, err := getSysNameFromQuery(opts[0].Config, log)
+	if err != nil {
+		return err
+	}
 	if len(opts[0].Hostlist) > 0 {
 		hostNames = strings.Fields(opts[0].Hostlist)
-	} else {
-		hostNames, err := getSysNameFromQuery(opts[0].Config, log)
-		_ = hostNames
-		if err != nil {
-			return err
-		}
 	}
 
 	for _, hostName := range hostNames {
