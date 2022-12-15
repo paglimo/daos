@@ -53,6 +53,9 @@ def _base_setup(env):
                         '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    env.AppendIfSupported(LINKFLAGS=DESIRED_FLAGS)
+    if '-fstack-protector-strong' in env["CCFLAGS"]:
+        env.AppendENVPath("CGO_LDFLAGS", "-fstack-protector-strong", sep=" ")
 
     if build_type == 'debug':
         if compiler == 'gcc':
