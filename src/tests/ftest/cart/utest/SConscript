@@ -43,7 +43,7 @@ def scons():
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
 
     for test in TEST_SRC:
-        flags = []
+        flags = test_env['LINKFLAGS']
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = test_env.d_test_program(target=testname,

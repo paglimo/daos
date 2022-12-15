@@ -53,6 +53,11 @@ def _base_setup(env):
                         '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    env.AppendIfSupported(CCFLAGS=["-Wno-error=maybe-uninitialized"])
+    print(f"CCFLAGS={env['CCFLAGS']}")
+    if '-fstack-protector-strong' in env["CCFLAGS"]:
+        env.AppendUnique(LINKFLAGS=['-fstack-protector-strong'])
+        env.AppendENVPath("CGO_LDFLAGS", "-fstack-protector-strong", sep=" ")
 
     if build_type == 'debug':
         if compiler == 'gcc':

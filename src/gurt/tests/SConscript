@@ -33,19 +33,21 @@ def scons():
         return
 
     test_env = env.Clone()
+    print(f'CCFLAGS={test_env["CCFLAGS"]}')
+    print(f'CXXFLAGS={test_env["CXXFLAGS"]}')
+    print(f'LINKFLAGS={test_env["LINKFLAGS"]}')
     prereqs.require(test_env, "mercury", "uuid", "cmocka")
     test_env.AppendUnique(LIBS=['pthread', 'm'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     tests = []
 
     for test in TEST_SRC:
-        flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = test_env.d_test_program(target=testname,
                                            source=testobj + gurt_targets,
                                            LIBS=test_env["LIBS"] + ['yaml'],
-                                           LINKFLAGS=flags)
+                                           LINKFLAGS=test_env['LINKFLAGS'])
         tests.append(testprog)
 
     Default(tests)

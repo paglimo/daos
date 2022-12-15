@@ -698,7 +698,7 @@ run_many_tests(struct cmd_info *pinfo)
 			ABT_thread_free(&ult_info->thread);
 			cinfo = ult_info->cinfo;
 			d_list_add(&ult_info->link, &free_list);
-			assert_status(cinfo);
+			if (cinfo) assert_status(cinfo);
 		}
 
 		D_ALLOC_PTR(cinfo);
@@ -716,7 +716,7 @@ run_many_tests(struct cmd_info *pinfo)
 		rc = handle_op(cinfo, true);
 		if (rc != 0) {
 			cinfo->status = rc;
-			assert_status(cinfo);
+			if (cinfo) assert_status(cinfo);
 			break;
 		}
 		run_counts[cinfo->type]++;
@@ -732,7 +732,7 @@ run_many_tests(struct cmd_info *pinfo)
 				return rc;
 			ABT_thread_free(&ult_info->thread);
 			cinfo = ult_info->cinfo;
-			assert_status(cinfo);
+			if (cinfo) assert_status(cinfo);
 			D_FREE(ult_info);
 		}
 

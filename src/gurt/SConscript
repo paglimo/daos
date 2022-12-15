@@ -17,6 +17,9 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
+    # if '-fstack-protector-strong' in env["CCFLAGS"]:
+    #     env.AppendUnique(LINKFLAGS=['-fstack-protector-strong'])
+
     denv = env.Clone()
 
     denv.AppendUnique(LIBS=['pthread', 'yaml', 'm'])
