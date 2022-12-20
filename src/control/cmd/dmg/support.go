@@ -38,8 +38,28 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	// Total 8 group of for dmg support collection
-	progress := support.ProgressBar{1, 8, 0, cmd.jsonOutputEnabled()}
+	// Default log collection set
+	var LogCollection = map[string][]string{
+		"CopyServerConfig":     {""},
+		"CollectSystemCmd":     support.SystemCmd,
+		"CollectServerLog":     support.ServerLog,
+		"CollectDaosServerCmd": support.DaosServerCmd,
+	}
+
+	// Default total 7 set of support collection steps
+	progress := support.ProgressBar{1, 7, 0, cmd.jsonOutputEnabled()}
+
+	// Add custome log location
+	if cmd.CustomLogs != "" {
+		LogCollection["CollectCustomLogs"] = []string{""}
+		progress.Total = progress.Total + 1
+	}
+
+	// Increase progress counter for Archive
+	if cmd.Archive == true {
+		progress.Total = progress.Total + 1
+	}
+	progress.Steps = 100 / progress.Total
 
 	// Check if DAOS Managment Service is up and running
 	params := support.Params{}
@@ -61,27 +81,11 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
-
-	// Default log collection set
-	var LogCollection = map[string][]string{
-		"CopyServerConfig":     {""},
-		"CollectSystemCmd":     support.SystemCmd,
-		"CollectServerLog":     support.ServerLog,
-		"CollectDaosServerCmd": support.DaosServerCmd,
-	}
-
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
 		return err
 	}
 
-	// Add custome log location
-	if cmd.CustomLogs != "" {
-		LogCollection["CollectCustomLogs"] = []string{""}
-		progress.Total = progress.Total + 1
-	}
-	progress.Steps = 100 / progress.Total
-
-	// Copy log/config file on all servers via rpc
+	// Copy log/config file to TargetFolder on all servers
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
 			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)

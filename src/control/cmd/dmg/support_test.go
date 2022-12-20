@@ -21,7 +21,7 @@ func TestSupportCollectlogCommands(t *testing.T) {
 		{
 			"support collectlog without any args",
 			"support collectlog",
-			printRequest(t, &control.SmdQueryReq{}),
+			printRequest(t, &control.CollectLogReq{}),
 			errors.New("DAOS Management Service is down"),
 		},
 	})
