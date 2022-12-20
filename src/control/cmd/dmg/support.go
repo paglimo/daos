@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/support"
@@ -39,12 +41,28 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Total 8 group of for dmg support collection
 	progress := support.ProgressBar{1, 8, 0, cmd.jsonOutputEnabled()}
 
+	// Check if DAOS Managment Service is up and running
+	params := support.Params{}
+	params.Config = cmd.cfgCmd.config.Path
+	params.LogFunction = "CollectDmgCmd"
+	params.LogCmd = "dmg system query"
+
+	err := support.CollectSupportLog(cmd.Logger, params)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "DAOS Management Service is down")
+	}
+
 	if cmd.TargetFolder == "" {
 		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 
-	hostName, _ := support.GetHostName()
+	// Default log collection set
 	var LogCollection = map[string][]string{
 		"CopyServerConfig":     {""},
 		"CollectSystemCmd":     support.SystemCmd,
@@ -56,13 +74,14 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		return err
 	}
 
-	// Copy the custome log location
+	// Add custome log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
 		progress.Total = progress.Total + 1
 	}
 	progress.Steps = 100 / progress.Total
 
+	// Copy log/config file on all servers via rpc
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
 			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
@@ -91,6 +110,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	// Rsync the logs from servers
+	hostName, _ := support.GetHostName()
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
 		LogFunction:  "rsyncLog",
@@ -111,13 +131,13 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 	support.PrintProgress(&progress)
 
-	// Collect dmg command output
+	// Collect dmg command output from local Admin node
 	var DmgInfoCollection = map[string][]string{
 		"CollectDmgCmd":      support.DmgCmd,
 		"CollectDmgDiskInfo": {""},
 	}
 
-	params := support.Params{}
+	params = support.Params{}
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
 	params.CustomLogs = cmd.CustomLogs
@@ -139,6 +159,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		support.PrintProgress(&progress)
 	}
 
+	// Archive the logs
 	if cmd.Archive == true {
 		cmd.Infof("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)

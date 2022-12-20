@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop":
+				"manpage", "system set-prop", "support collectlog":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
@@ -119,8 +119,6 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "--ranks", "0")
 			case "system clear-exclude":
 				testArgs = append(testArgs, "--ranks", "0")
-			case "support collectlog":
-				testArgs = append(testArgs, "-t", "/tmp/daos_support_logs")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

@@ -193,15 +193,13 @@ func cpOutputToFile(target string, log logging.Logger, cp ...copy) (string, erro
 	runCmd := strings.Join([]string{cp[0].Cmd, cp[0].Options}, " ")
 	out, err := exec.Command("sh", "-c", runCmd).CombinedOutput()
 	if err != nil {
-		log.Errorf("FAILED -- Error running command -- %s -- %s", runCmd, out)
-		return "", errors.Wrapf(err, "Error running command %s with %s", runCmd, out)
+		return "", errors.New(string(out))
 	}
 
 	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, target)
 	cmd := strings.ReplaceAll(cp[0].Cmd, " -", "_")
 	cmd = strings.ReplaceAll(cmd, " ", "_")
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
-		log.Errorf("FAILED -- To Write command -- %s -- %s", cmd, err)
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
 	}
 
