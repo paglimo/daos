@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,8 +18,7 @@ type SupportCmd struct {
 	CollectLog collectLogCmd `command:"collectlog" description:"Collect logs from server"`
 }
 
-// collectLogCmd is the struct representing the command to scan the machine for network interface devices
-// that match the given fabric provider.
+// collectLogCmd is the struct representing the command to collect the Logs/config for support purpose 
 type collectLogCmd struct {
 	cfgCmd
 	cmdutil.LogCmd
@@ -30,18 +29,6 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	// Default 4 steps of log/conf collection.
-	progress := support.ProgressBar{1, 4, 0, false}
-
-	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_server_logs"
-	}
-	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
-
-	if cmd.Archive == true {
-		progress.Total = progress.Total + 1
-	}
-
 	var LogCollection = map[string][]string{
 		"CopyServerConfig":     {""},
 		"CollectSystemCmd":     support.SystemCmd,
@@ -49,11 +36,23 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		"CollectDaosServerCmd": support.DaosServerCmd,
 	}
 
-	// Copy the custome log location
+	// Default 4 steps of log/conf collection.
+	progress := support.ProgressBar{1, 4, 0, false}
+
+	if cmd.Archive == true {
+		progress.Total = progress.Total + 1
+	}
+
+	// Copy the custom log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
 		progress.Total = progress.Total + 1
+	}	
+
+	if cmd.TargetFolder == "" {
+		cmd.TargetFolder = "/tmp/daos_support_server_logs"
 	}
+	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 
 	progress.Steps = 100 / progress.Total
 	params := support.Params{}

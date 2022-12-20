@@ -1,3 +1,9 @@
+//
+// (C) Copyright 2022 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
 package support
 
 import (
@@ -20,16 +26,16 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
-// Folder structure to copy logs and configs
+// Folder names to copy logs and configs
 const (
 	dmgSystemLogFolder = "DmgSystemLog"     // Copy the dmg command output for DAOS system
 	daosNodeLogFolder  = "DaosNodeLog"      // Copy the dmg command output specific to the storage.
 	daosAgentCmdInfo   = "DaosAgentCmdInfo" // Copy the daos_agent command output specific to the node.
 	systemInfo         = "SysInfo"          // Copy the system related information
-	serverLogs         = "ServerLogs"       // Copy the server/conrol and helper logs
-	clientLogs         = "ClientLogs"       // Copy the server/conrol and helper logs
+	serverLogs         = "ServerLogs"       // Copy the server/control and helper logs
+	clientLogs         = "ClientLogs"       // Copy the server/control and helper logs
 	daosConfig         = "ServerConfig"     // Copy the server config
-	customLogs         = "CustomeLogs"      // Copy the Custome logs
+	customLogs         = "CustomeLogs"      // Copy the Custom logs
 )
 
 const DmgListDeviceCmd = "dmg storage query list-devices"
@@ -75,10 +81,10 @@ var DaosServerCmd = []string{
 }
 
 type ProgressBar struct {
-	Start      int  // Bar start int number
-	Total      int  // Bar end int number
+	Start      int  // start int number
+	Total      int  // end int number
 	Steps      int  // Int number be increased per steps
-	JsonOutput bool // Json option check and skip progress bar if it's enabled
+	JsonOutput bool // Json option to skip progress bar if it's enabled
 }
 
 type Params struct {
@@ -96,6 +102,7 @@ type copy struct {
 	Options string
 }
 
+// Print the progress bar during log collect command
 func PrintProgress(progBar *ProgressBar) {
 	if !(progBar.JsonOutput) {
 		fmt.Printf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
@@ -103,12 +110,14 @@ func PrintProgress(progBar *ProgressBar) {
 	}
 }
 
+// Print the progress End once the log collection completed.
 func PrintProgressEnd(progBar *ProgressBar) {
 	if !(progBar.JsonOutput) {
 		fmt.Printf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), progBar.Total, progBar.Total)
 	}
 }
 
+// Check if daos_engine process is running and return the bool value accordingly.
 func checkEngineState(log logging.Logger) (bool, error) {
 	_, err := exec.Command("bash", "-c", "pidof daos_engine").Output()
 	if err != nil {
@@ -118,6 +127,7 @@ func checkEngineState(log logging.Logger) (bool, error) {
 	return true, nil
 }
 
+// Get the server config from the running daos engine
 func getRunningConf(log logging.Logger) (string, error) {
 	running_config := ""
 	runState, err := checkEngineState(log)
@@ -137,6 +147,7 @@ func getRunningConf(log logging.Logger) (string, error) {
 	return running_config, nil
 }
 
+// Get the server config, either from the running daos engine or default
 func getServerConf(log logging.Logger, opts ...Params) (string, error) {
 	cfgPath, err := getRunningConf(log)
 
@@ -152,6 +163,7 @@ func getServerConf(log logging.Logger, opts ...Params) (string, error) {
 	return cfgPath, nil
 }
 
+// Copy file from source to destination
 func cpLogFile(src, dst string, log logging.Logger) error {
 	log_file_name := filepath.Base(src)
 	log.Debugf(" -- Copy File %s to %s\n", log_file_name, dst)
@@ -164,6 +176,7 @@ func cpLogFile(src, dst string, log logging.Logger) error {
 	return nil
 }
 
+// Create the local folder on each servers
 func createFolder(target string, log logging.Logger) error {
 	// Create the folder if it's not exist
 	if _, err := os.Stat(target); os.IsNotExist(err) {
@@ -177,6 +190,7 @@ func createFolder(target string, log logging.Logger) error {
 	return nil
 }
 
+// Get the system hostname
 func GetHostName() (string, error) {
 	hn, err := exec.Command("hostname", "-s").Output()
 	if err != nil {
@@ -187,6 +201,7 @@ func GetHostName() (string, error) {
 	return out[0], nil
 }
 
+// Copy Command output to the file
 func cpOutputToFile(target string, log logging.Logger, cp ...copy) (string, error) {
 	// Run command and copy output to the file
 	// executing as subshell enables pipes in cmd string
@@ -206,6 +221,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...copy) (string, erro
 	return string(out), nil
 }
 
+// Create the Archive of logs.
 func ArchiveLogs(log logging.Logger, opts ...Params) error {
 	var buf bytes.Buffer
 	err := common.FolderCompress(opts[0].TargetFolder, &buf)
@@ -230,8 +246,8 @@ func ArchiveLogs(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Create the individual folder on each server based on hostname
 func createHostFolder(dst string, log logging.Logger) (string, error) {
-	// Create the individual folder on each server
 	hn, err := GetHostName()
 	if err != nil {
 		return "", err
@@ -246,6 +262,7 @@ func createHostFolder(dst string, log logging.Logger) (string, error) {
 	return targetLocation, nil
 }
 
+// Create the individual log folder on each server
 func createHostLogFolder(dst string, log logging.Logger, opts ...Params) (string, error) {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
@@ -262,6 +279,7 @@ func createHostLogFolder(dst string, log logging.Logger, opts ...Params) (string
 
 }
 
+// Get all the servers name from the dmg query
 func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error) {
 	var hostNames []string
 
@@ -291,6 +309,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
+// Rsync the logs from individual servers to Admin node 
 func rsyncLog(log logging.Logger, opts ...Params) error {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
@@ -319,21 +338,22 @@ func rsyncLog(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Collect the custom log folder 
 func CollectCustomLogs(log logging.Logger, opts ...Params) error {
-	log.Infof("Log will be collected from custome location %s", opts[0].CustomLogs)
+	log.Infof("Log will be collected from custom location %s", opts[0].CustomLogs)
 
 	hn, err := GetHostName()
 	if err != nil {
 		return err
 	}
 
-	customeLogFolder := filepath.Join(opts[0].TargetFolder, hn, customLogs)
-	err = createFolder(customeLogFolder, log)
+	customLogFolder := filepath.Join(opts[0].TargetFolder, hn, customLogs)
+	err = createFolder(customLogFolder, log)
 	if err != nil {
 		return err
 	}
 
-	err = common.CpDir(opts[0].CustomLogs, customeLogFolder)
+	err = common.CpDir(opts[0].CustomLogs, customLogFolder)
 	if err != nil {
 		return err
 	}
@@ -341,8 +361,8 @@ func CollectCustomLogs(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Collect the disk info using dmg command from each server.
 func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
-	// Get the Hostlist
 	var hostNames []string
 	var output string
 
@@ -361,7 +381,7 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 		dmg.Options = strings.Join([]string{"-o", opts[0].Config, "-l", hostName}, " ")
 		targetDmgLog := filepath.Join(opts[0].TargetFolder, hostName, daosNodeLogFolder)
 
-		// Create the Folder if log location is not shared FS.
+		// Create the Folder.
 		err := createFolder(targetDmgLog, log)
 		if err != nil {
 			return err
@@ -372,7 +392,7 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 			return err
 		}
 
-		// Copy each device health from each server
+		// Get each device health information from each server
 		for _, v1 := range strings.Split(output, "\n") {
 			if strings.Contains(v1, "UUID") {
 				device := strings.Fields(v1)[0][5:]
@@ -390,8 +410,8 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Run command and copy the output to file.
 func CollectCmdOutput(folderName string, log logging.Logger, opts ...Params) error {
-	// Collect daos_agent command output
 	nodeLocation, err := createHostLogFolder(folderName, log, opts...)
 	if err != nil {
 		return err
@@ -407,8 +427,8 @@ func CollectCmdOutput(folderName string, log logging.Logger, opts ...Params) err
 	return nil
 }
 
+// Collect client side log
 func CollectClientLog(log logging.Logger, opts ...Params) error {
-	// Collect client side log
 	clientLogFile := os.Getenv("D_LOG_FILE")
 	if clientLogFile != "" {
 		clientLogLocation, err := createHostLogFolder(clientLogs, log, opts...)
@@ -428,6 +448,7 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Collect the output of all dmg command and copy into individual file.
 func CollectDmgCmd(log logging.Logger, opts ...Params) error {
 	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogFolder)
 	err := createFolder(targetDmgLog, log)
@@ -451,6 +472,7 @@ func CollectDmgCmd(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Copy server config file.
 func CopyServerConfig(log logging.Logger, opts ...Params) error {
 	cfgPath, err := getServerConf(log, opts...)
 
@@ -479,9 +501,8 @@ func CopyServerConfig(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Collect all server side logs
 func CollectServerLog(log logging.Logger, opts ...Params) error {
-	// Get the running daos_engine state and config from running process
-	// Use the provided config in case of engines are down.
 	var cfgPath string
 
 	if opts[0].Config != "" {
@@ -524,6 +545,7 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Collect daos metrics.
 func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Params) error {
 	engineRunState, err := checkEngineState(log)
 	if err != nil {
@@ -558,6 +580,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Par
 	return nil
 }
 
+// Collect output of system side option of daos_server command.
 func CollectDaosServerCmd(log logging.Logger, opts ...Params) error {
 	daosNodeLocation, err := createHostLogFolder(daosNodeLogFolder, log, opts...)
 	if err != nil {
@@ -588,6 +611,7 @@ func CollectDaosServerCmd(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Common Entry/Exit point function.
 func CollectSupportLog(log logging.Logger, opts ...Params) error {
 	switch opts[0].LogFunction {
 	case "CopyServerConfig":

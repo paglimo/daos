@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,29 +29,29 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	// Default 3 steps of log/conf collection.
-	progress := support.ProgressBar{1, 3, 0, false}
-
-	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = "/tmp/daos_support_client_logs"
-	}
-	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
-
-	if cmd.Archive == true {
-		progress.Total = progress.Total + 1
-	}
-
 	var LogCollection = map[string][]string{
 		"CollectAgnetCmd":  support.AgnetCmd,
 		"CollectClientLog": {""},
 		"CollectSystemCmd": support.SystemCmd,
 	}
 
-	// Copy the custome log location
+	// Default 3 steps of log/conf collection.
+	progress := support.ProgressBar{1, 3, 0, false}
+
+	if cmd.Archive == true {
+		progress.Total = progress.Total + 1
+	}
+
+	// Copy the custom log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
 		progress.Total = progress.Total + 1
 	}
+
+	if cmd.TargetFolder == "" {
+		cmd.TargetFolder = "/tmp/daos_support_client_logs"
+	}
+	cmd.Infof("Support Logs will be copied to %s", cmd.TargetFolder)
 
 	progress.Steps = 100 / progress.Total
 	params := support.Params{}

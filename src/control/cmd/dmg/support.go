@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,22 +46,22 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		"CollectDaosServerCmd": support.DaosServerCmd,
 	}
 
-	// Default total 7 set of support collection steps
+	// Default 7 set of support collection steps to show in progress bar
 	progress := support.ProgressBar{1, 7, 0, cmd.jsonOutputEnabled()}
 
-	// Add custome log location
+	// Add custom log location
 	if cmd.CustomLogs != "" {
 		LogCollection["CollectCustomLogs"] = []string{""}
 		progress.Total = progress.Total + 1
 	}
 
-	// Increase progress counter for Archive
+	// Increase progress counter for Archive if enabled
 	if cmd.Archive == true {
 		progress.Total = progress.Total + 1
 	}
 	progress.Steps = 100 / progress.Total
 
-	// Check if DAOS Managment Service is up and running
+	// Check if DAOS Management Service is up and running
 	params := support.Params{}
 	params.Config = cmd.cfgCmd.config.Path
 	params.LogFunction = "CollectDmgCmd"
@@ -135,7 +135,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 	support.PrintProgress(&progress)
 
-	// Collect dmg command output from local Admin node
+	// Collect dmg command output on Admin node
 	var DmgInfoCollection = map[string][]string{
 		"CollectDmgCmd":      support.DmgCmd,
 		"CollectDmgDiskInfo": {""},
