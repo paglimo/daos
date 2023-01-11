@@ -1,3 +1,10 @@
+daos (2.3.107-6) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update packaging
+    - TODO: list changes
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 29 May 2023 14:43:22 -0400
+
 daos (2.3.107-5) unstable; urgency=medium
     [ Lei Huang ]
     * Add libcapstone-devel to deps of client-tests package
@@ -93,7 +100,7 @@ daos (2.3.101-5) unstable; urgency=medium
   [Joseph Moore]
   * Update Mercury version to 2.2.0-6
 
- -- Joseph Moore <joseph.moored@intel.com> Tue, Dec 6 2022 12:15:00 - 0400
+ -- Joseph Moore <joseph.moore@intel.com>  Tue, 06 Dec 2022 12:15:00 -0400
 
 daos (2.3.101-4) unstable; urgency=medium
   [ Tom Nabarro ]
@@ -111,7 +118,7 @@ daos (2.3.101-2) unstable; urgency=medium
   [Michael MacDonald]
   * Rename daos_admin -> daos_server_helper
 
- -- Michael MacDonald <mjmac.macdonald@intel.com> Thu, Oct 6 2022 10:10:00
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Thu, 06 Oct 2022 10:10:00
 
 daos (2.3.101-1) unstable; urgency=medium
   [ Johann Lombardi ]
@@ -123,7 +130,7 @@ daos (2.3.100-22) unstable; urgency=medium
   [ Jeff Olivier ]
   * Move io_conf files from bin to TESTING
 
- -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Thu, 8 Sep 2022 10:26:00 -0400
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Thu, 08 Sep 2022 10:26:00 -0400
 
 daos (2.3.100-21) unstable; urgency=medium
   [ Jeff Olivier ]
@@ -147,7 +154,7 @@ daos (2.3.100-18) unstable; urgency=medium
   [Michael MacDonald]
   * Bump min supported go version to 1.16
 
- -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00 -0400
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, 26 Jul 2022 10:10:00 -0400
 
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]

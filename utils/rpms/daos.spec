@@ -202,6 +202,7 @@ This is the package is a metapackage to install all of the test packages
 Summary: The entire internal DAOS test suite
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
 BuildArch: noarch
 
 %description tests-internal
@@ -221,6 +222,8 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: mpifileutils-mpich
+Requires: ior
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -560,8 +563,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Sat May 20 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.107-6
-- Build on EL9
+* Mon May 29 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.107-6
+- Build on EL9 and Ubuntu 20.04
 
 * Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
 - Add libcapstone-devel to deps of client-tests package
