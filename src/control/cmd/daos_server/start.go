@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -197,6 +197,7 @@ func (cmd *startCmd) Execute(args []string) error {
 		if err != nil {
 			return errors.WithMessage(err, "starting with auto config")
 		}
+		cfg.AutoFormat = true
 		// TODO: hardcoded for the moment ???
 		cfg.TransportConfig.AllowInsecure = true
 		cmd.config = cfg
