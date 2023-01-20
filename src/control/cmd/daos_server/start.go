@@ -7,12 +7,15 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -27,13 +30,14 @@ type startCmd struct {
 	Port                uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
 	MountPath           string  `short:"s" long:"storage" description:"Storage path"`
 	Modules             *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Targets             uint16  `short:"t" long:"targets" description:"number of targets to use (default use all cores)"`
-	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
-	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
+	Targets             uint16  `short:"t" long:"targets" description:"Number of targets to use (default use all cores)"`
+	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"Number of helper XS per VOS target"`
+	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"Index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
 	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
-	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
-	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
+	Insecure            bool    `short:"i" long:"insecure" description:"Allow for insecure connections"`
+	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"Recreate missing superblocks rather than failing"`
+	Auto                bool    `long:"auto" description:"Automatically generate server config used to start service"`
 }
 
 func (cmd *startCmd) setCLIOverrides() error {
@@ -142,9 +146,60 @@ func (cmd *startCmd) configureLogging() error {
 	return applyLogConfig()
 }
 
+func (cmd *startCmd) fetchLocalConfig(ctx context.Context) (*config.Server, error) {
+	// TODO: Receive access points, provider and use-tmpfs-scm on commandline.
+	cmd.Info("generating config to start server with")
+
+	hf, err := getLocalFabric(ctx, cmd.Logger)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
+
+	hs, err := getLocalStorage(ctx, cmd.Logger)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
+
+	req := control.ConfGenerateReq{
+		Log: cmd.Logger,
+		// TODO: hardcode defaults for the moment until taken from commandline
+		NetClass:     hardware.Infiniband,
+		AccessPoints: []string{"localhost"},
+		// NetProvider:  cmd.NetProvider,
+		// AccessPoints: accessPoints,
+	}
+	if len(hs.ScmNamespaces) == 0 {
+		req.UseTmpfsSCM = true
+	}
+
+	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
+
+	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
+	if err != nil {
+		return nil, err
+	}
+
+	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
+	return &resp.Server, nil
+}
+
 func (cmd *startCmd) Execute(args []string) error {
 	if cmd.start == nil {
 		cmd.start = server.Start
+	}
+
+	if cmd.Auto {
+		// TODO: pass context from here into start
+		ctx := context.TODO()
+		cfg, err := cmd.fetchLocalConfig(ctx)
+		if err != nil {
+			return errors.WithMessage(err, "starting with auto config")
+		}
+		// TODO: hardcoded for the moment ???
+		cfg.TransportConfig.AllowInsecure = true
+		cmd.config = cfg
 	}
 
 	if err := cmd.configureLogging(); err != nil {

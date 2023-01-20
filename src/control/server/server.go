@@ -496,6 +496,11 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		}
 	}()
 
+	//	if cfg.AutoFormat {
+	if _, err := srv.ctlSvc.StorageFormat(ctx, &ctlpb.StorageFormatReq{}); err != nil {
+		return errors.WithMessage(err, "attempting to auto format")
+	}
+
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }
