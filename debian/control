@@ -120,8 +120,7 @@ Depends: python3 (>=3.8), python-yaml, python3-yaml,
          daos-client (= ${binary:Version}),
              daos-admin (= ${binary:Version}),
          libcapstone-dev,
-         mpich, ior
-# above should actually be mpifileutils-mpich once we have it ported
+         mpich, ior, mpifileutils-mpich
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage
