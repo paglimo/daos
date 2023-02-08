@@ -205,6 +205,7 @@ Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
 Requires: mpifileutils-mpich
 Requires: mpich
+Requires: ior
 BuildArch: noarch
 
 %description tests-internal
@@ -224,7 +225,6 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
-Requires: ior
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
