@@ -191,6 +191,7 @@ def load_mpi(mpi):
                 return False
         for line in proc.stdout.readlines():
             if line.startswith(b"Alternative:"):
+                print(line)
                 if line[line.rfind(b".") + 1:-1].decode() == mpi:
                     return True
         return False
