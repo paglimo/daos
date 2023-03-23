@@ -322,7 +322,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	call := &Call{
 		Module: int32(mod.ID()),
 	}
-	resp, err := client.SendMsg(call)
+	resp, err := client.SendMsg(context.TODO(), call)
 	if err != nil {
 		t.Fatalf("failed to send message: %v", err)
 	}

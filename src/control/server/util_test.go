@@ -108,7 +108,7 @@ func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
 	return
 }
 
-func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
+func (c *mockDrpcClient) SendMsg(_ context.Context, call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
 	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
 	if err != nil {
