@@ -1394,6 +1394,17 @@ rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
 	}
 }
 
+static raft_time_t
+rdb_raft_cb_get_time(raft_server_t *raft, void *user_data)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	D_ASSERTF(rc == 0, "clock_gettime: %d\n", errno);
+	return now.tv_sec * 1000 + now.tv_nsec / (1000 * 1000);
+}
+
 /*
  * rdb's raft callback implementations
  *
@@ -1415,7 +1426,8 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log_pop			= rdb_raft_cb_log_pop,
 	.log_get_node_id		= rdb_raft_cb_log_get_node_id,
 	.notify_membership_event	= rdb_raft_cb_notify_membership_event,
-	.log				= rdb_raft_cb_debug
+	.log				= rdb_raft_cb_debug,
+	.get_time			= rdb_raft_cb_get_time
 };
 
 static int
@@ -2020,12 +2032,13 @@ rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
 int
 rdb_raft_verify_leadership(struct rdb *db)
 {
+	if (raft_has_majority_leases(db->d_raft))
+		return 0;
 	/*
-	 * raft does not provide this functionality yet; append an empty entry
-	 * as a (slower) workaround.
+	 * Since raft does not provide a function for verifying leadership via
+	 * RPCs yet, append an empty entry as a (slower) workaround.
 	 */
-	return rdb_raft_append_apply(db, NULL /* entry */, 0 /* size */,
-				     NULL /* result */);
+	return rdb_raft_append_apply(db, NULL /* entry */, 0 /* size */, NULL /* result */);
 }
 
 /* Generate a random double in [0.0, 1.0]. */
@@ -2072,7 +2085,7 @@ rdb_timerd(void *arg)
 
 		ABT_mutex_lock(db->d_raft_mutex);
 		rdb_raft_save_state(db, &state);
-		rc = raft_periodic(db->d_raft, d_prev * 1000 /* ms */);
+		rc = raft_periodic(db->d_raft);
 		rc = rdb_raft_check_state(db, &state, rc);
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (rc != 0)
@@ -2422,6 +2435,21 @@ rdb_raft_get_request_timeout(void)
 	return value;
 }
 
+static int
+rdb_raft_get_lease_maintenance_grace(void)
+{
+	char	       *name = "RDB_LEASE_MAINTENANCE_GRACE";
+	unsigned int	default_value = 7000;
+	unsigned int	value = default_value;
+
+	d_getenv_int(name, &value);
+	if (value == 0 || value > INT_MAX) {
+		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
+		value = default_value;
+	}
+	return value;
+}
+
 static uint64_t
 rdb_raft_get_compact_thres(void)
 {
@@ -2646,6 +2674,7 @@ rdb_raft_start(struct rdb *db)
 {
 	int	election_timeout;
 	int	request_timeout;
+	int	lease_maintenance_grace;
 	int	rc;
 
 	D_ASSERT(db->d_raft == NULL);
@@ -2669,8 +2698,10 @@ rdb_raft_start(struct rdb *db)
 
 	election_timeout = rdb_raft_get_election_timeout();
 	request_timeout = rdb_raft_get_request_timeout();
+	lease_maintenance_grace = rdb_raft_get_lease_maintenance_grace();
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
+	raft_set_lease_maintenance_grace(db->d_raft, lease_maintenance_grace);
 
 	rc = dss_ult_create(rdb_recvd, db, DSS_XS_SELF, 0, 0, &db->d_recvd);
 	if (rc != 0)
@@ -2689,8 +2720,9 @@ rdb_raft_start(struct rdb *db)
 
 	D_DEBUG(DB_MD,
 		DF_DB": raft started: election_timeout=%dms request_timeout=%dms "
-		"compact_thres="DF_U64" ae_max_entries=%u ae_max_size="DF_U64"\n", DP_DB(db),
-		election_timeout, request_timeout, db->d_compact_thres, db->d_ae_max_entries,
+		"lease_maintenance_grace=%dms compact_thres="DF_U64" ae_max_entries=%u "
+		"ae_max_size="DF_U64"\n", DP_DB(db), election_timeout, request_timeout,
+		lease_maintenance_grace, db->d_compact_thres, db->d_ae_max_entries,
 		db->d_ae_max_size);
 	return 0;
 
@@ -3073,6 +3105,16 @@ out:
 			srcrank, rc);
 }
 
+/* Adjust the lease expiration time for clock offsets among replicas. */
+static void
+rdb_raft_adjust_lease(raft_time_t *lease)
+{
+	int adjustment = d_hlc2msec(d_hlc_epsilon_get()) + 1 /* ms */;
+
+	if (*lease >= adjustment)
+		*lease -= adjustment;
+}
+
 void
 rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 {
@@ -3116,11 +3158,13 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		break;
 	case RDB_APPENDENTRIES:
 		out_ae = out;
+		rdb_raft_adjust_lease(&out_ae->aeo_msg.lease);
 		rc = raft_recv_appendentries_response(db->d_raft, node,
 						      &out_ae->aeo_msg);
 		break;
 	case RDB_INSTALLSNAPSHOT:
 		out_is = out;
+		rdb_raft_adjust_lease(&out_is->iso_msg.lease);
 		rc = raft_recv_installsnapshot_response(db->d_raft, node,
 							&out_is->iso_msg);
 		break;

@@ -71,7 +71,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.9.2-1.406.g8722bdd%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
