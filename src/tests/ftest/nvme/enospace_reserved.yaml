@@ -1,0 +1,45 @@
+hosts:
+  test_servers: 2
+  test_clients: 2
+timeout: 1000  # TODO
+server_config:
+  name: daos_server
+  # engines_per_host: 2
+  # engines:
+  #   0:
+  #     pinned_numa_node: 0
+  #     nr_xs_helpers: 1
+  #     fabric_iface: ib0
+  #     fabric_iface_port: 31317
+  #     storage: auto
+  #   1:
+  #     pinned_numa_node: 1
+  #     nr_xs_helpers: 1
+  #     fabric_iface: ib1
+  #     fabric_iface_port: 31417
+  #     storage: auto
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 20
+pool:
+  scm_size: 5G
+  # nvme_size: 10G
+  properties: space_rb:50,reclaim:disabled
+container:
+  control_method: daos
+  type: POSIX
+ior:
+  api: DFS
+  client_processes:
+    np: 32
+  write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
+  test_file: /testFile
+  scm_transfersize: 2K
+  nvme_transfersize: 8K
