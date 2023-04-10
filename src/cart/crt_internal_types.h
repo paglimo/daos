@@ -13,6 +13,11 @@
 
 #define CRT_CONTEXT_NULL         (NULL)
 
+#ifndef CRT_SRV_CONTEXT_NUM
+#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
+#endif
+
+
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
@@ -49,6 +54,9 @@ struct crt_prov_gdata {
 	int			cpg_ctx_num;
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
+
+	/** free-list of indices */
+	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
 	uint32_t		cpg_max_exp_size;
@@ -116,7 +124,7 @@ struct crt_gdata {
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
-	/* protects crt_gdata */
+	/* protects crt_gdata (see the lock order comment on crp_mutex) */
 	pthread_rwlock_t	cg_rwlock;
 
 	/** Global statistics (when cg_use_sensors = true) */
@@ -145,10 +153,6 @@ struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
 };
-
-#ifndef CRT_SRV_CONTEXT_NUM
-#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
-#endif
 
 #ifndef CRT_PROGRESS_NUM
 #define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
@@ -197,7 +201,10 @@ struct crt_context {
 	struct d_hash_table	 cc_epi_table;
 	/** binheap for inflight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
-	/** mutex to protect cc_epi_table and timeout binheap */
+	/**
+	 * mutex to protect cc_epi_table and timeout binheap (see the lock
+	 * order comment on crp_mutex)
+	 */
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
@@ -237,7 +244,10 @@ struct crt_ep_inflight {
 	unsigned int		 epi_ref;
 	unsigned int		 epi_initialized:1;
 
-	/* mutex to protect ei_req_q and some counters */
+	/*
+	 * mutex to protect ei_req_q and some counters (see the lock order
+	 * comment on crp_mutex)
+	 */
 	pthread_mutex_t		 epi_mutex;
 };
 

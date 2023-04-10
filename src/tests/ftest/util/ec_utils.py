@@ -8,13 +8,13 @@ import threading
 import queue
 import time
 
+from pydaos.raw import DaosApiError
+
 from nvme_utils import ServerFillUp
 from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 from apricot import TestWithServers
 from mdtest_test_base import MdtestBase
 from fio_test_base import FioBase
-from pydaos.raw import DaosApiError
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, run_pcmd
 
@@ -73,9 +73,7 @@ def check_aggregation_status(log, pool, quick_check=True, attempt=20):
 
 
 class ErasureCodeIor(ServerFillUp):
-    # pylint: disable=too-many-ancestors
-    """
-    Class to used for EC testing.
+    """Class to used for EC testing.
 
     It will get the object types from yaml file write the IOR data set with IOR.
     """
@@ -100,7 +98,12 @@ class ErasureCodeIor(ServerFillUp):
         engine_count = self.server_managers[0].get_config_value("engines_per_host")
         self.server_count = len(self.hostlist_servers) * engine_count
         # Create the Pool
-        self.create_pool_max_size()
+        kwargs = {
+            "scm": self.params.get("scm", "/run/create_pool_max_size/*", False),
+            "nvme": self.params.get("nvme", "/run/create_pool_max_size/*", False),
+            "percentage": self.params.get("percentage", "/run/create_pool_max_size/*", 96)
+        }
+        self.create_pool_max_size(**kwargs)
         self.update_ior_cmd_with_pool()
         self.obj_class = self.params.get("dfs_oclass_list", '/run/ior/objectclass/*')
         self.ior_chu_trs_blk_size = self.params.get("chunk_block_transfer_sizes", '/run/ior/*')
@@ -108,9 +111,8 @@ class ErasureCodeIor(ServerFillUp):
     def ec_container_create(self, oclass):
         """Create the container for EC object."""
         # Get container params
-        self.ec_container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
-        self.ec_container.get_params(self)
-        self.ec_container.oclass.update(oclass)
+        self.ec_container = self.get_container(
+            self.pool, create=False, daos_command=self.get_daos_command(), oclass=oclass)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -139,7 +141,6 @@ class ErasureCodeIor(ServerFillUp):
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
-        # pylint: disable=too-many-arguments
         """Write IOR single data set with EC object.
 
         Args:
@@ -250,8 +251,6 @@ class ErasureCodeIor(ServerFillUp):
 
 
 class ErasureCodeSingle(TestWithServers):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-instance-attributes
     """Class to used for EC testing for single type data."""
 
     def __init__(self, *args, **kwargs):
@@ -275,39 +274,34 @@ class ErasureCodeSingle(TestWithServers):
         self.add_pool()
         self.out_queue = queue.Queue()
 
-    def ec_container_create(self, index, oclass):
+    def ec_container_create(self, oclass):
         """Create the container for EC object.
 
         Args:
-            index (int): container number
             oclass (str): object class for creating the container.
         """
-        self.container.append(TestContainer(self.pool))
-        # Get container parameters
-        self.container[index].get_params(self)
-
-        # update object class for container create, if supplied explicitly.
-        self.container[index].oclass.update(oclass)
+        self.container.append(self.get_container(self.pool, create=False, oclass=oclass))
 
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)
-        self.container[index].properties.update("rd_fac:{}".format(ec_object['parity']))
+        self.container[-1].properties.update("rd_fac:{}".format(ec_object['parity']))
 
         # create container
-        self.container[index].create()
+        self.container[-1].create()
 
-    def single_type_param_update(self, index, data):
+    @staticmethod
+    def single_type_param_update(container, data):
         """Update the data set content provided from yaml file.
 
         Args:
-            index (int): container number
+            container (TestContainer): container object
             data (list): dataset content from test yaml file.
         """
-        self.container[index].object_qty.update(data[0])
-        self.container[index].record_qty.update(data[1])
-        self.container[index].dkey_size.update(data[2])
-        self.container[index].akey_size.update(data[3])
-        self.container[index].data_size.update(data[4])
+        container.object_qty.update(data[0])
+        container.record_qty.update(data[1])
+        container.dkey_size.update(data[2])
+        container.akey_size.update(data[3])
+        container.data_size.update(data[4])
 
     def write_single_type_dataset(self, results=None):
         """Write single type data set with different EC object and different sizes.
@@ -315,7 +309,6 @@ class ErasureCodeSingle(TestWithServers):
         Args:
             results (queue): queue for returning thread results
         """
-        cont_count = 0
         for oclass in self.obj_class:
             for sizes in self.singledata_set:
                 # Skip the object type if server count does not meet the minimum EC object server
@@ -324,11 +317,10 @@ class ErasureCodeSingle(TestWithServers):
                     continue
                 # Create the new container with correct redundancy factor for EC object type
                 try:
-                    self.ec_container_create(cont_count, oclass[0])
-                    self.single_type_param_update(cont_count, sizes)
+                    self.ec_container_create(oclass[0])
+                    self.single_type_param_update(self.container[-1], sizes)
                     # Write the data
-                    self.container[cont_count].write_objects(obj_class=oclass[0])
-                    cont_count += 1
+                    self.container[-1].write_objects(obj_class=oclass[0])
                     if results is not None:
                         results.put("PASS")
                 except (CommandFailure, DaosApiError, DaosTestError):
@@ -412,7 +404,6 @@ class ErasureCodeSingle(TestWithServers):
 
 
 class ErasureCodeMdtest(MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Class to used for EC testing for MDtest Benchmark."""
 
     def __init__(self, *args, **kwargs):
@@ -471,7 +462,6 @@ class ErasureCodeMdtest(MdtestBase):
 
 
 class ErasureCodeFio(FioBase):
-    # pylint: disable=too-many-ancestors
     """Class to use for EC testing with Fio Benchmark."""
 
     def __init__(self, *args, **kwargs):

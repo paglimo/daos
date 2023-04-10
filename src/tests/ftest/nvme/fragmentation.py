@@ -13,11 +13,9 @@ from write_host_file import write_host_file
 from ior_utils import IorCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
-from test_utils_base import LabelGenerator
 
 
 class NvmeFragmentation(TestWithServers):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-instance-attributes
     """NVMe drive fragmentation test cases.
 
@@ -40,7 +38,6 @@ class NvmeFragmentation(TestWithServers):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
-        self.cont_label_generator = LabelGenerator('cont')
 
     def ior_runner_thread(self, results):
         """Start threads and wait until all threads are finished.
@@ -72,7 +69,7 @@ class NvmeFragmentation(TestWithServers):
 
             # Define the job manager for the IOR command
             job_manager = get_job_manager(self, job=ior_cmd)
-            cont_label = self.cont_label_generator.get_label()
+            cont_label = self.label_generator.get_label('cont')
             job_manager.job.dfs_cont.update(cont_label)
             env = ior_cmd.get_default_env(str(job_manager))
             job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
