@@ -7,6 +7,12 @@
 // Package build provides an importable repository of variables set at build time.
 package build
 
+import (
+	"fmt"
+	"runtime/debug"
+	"strings"
+)
+
 var (
 	// ConfigDir should be set via linker flag using the value of CONF_DIR.
 	ConfigDir string = "./"
@@ -27,3 +33,26 @@ var (
 	// DefaultSystemName defines the default DAOS system name.
 	DefaultSystemName = "daos_server"
 )
+
+func revString() string {
+	var revString string
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				revString = fmt.Sprintf("-g%s", fmt.Sprintf("%10s", setting.Value)[0:10])
+			case "-tags":
+				if strings.Contains(setting.Value, "release") {
+					return ""
+				}
+			}
+		}
+	}
+	return revString
+}
+
+// VersionString returns a string containing the name, version, and for non-release builds,
+// the revision of the binary.
+func VersionString(name string) string {
+	return fmt.Sprintf("%s version %s%s", name, DaosVersion, revString())
+}
