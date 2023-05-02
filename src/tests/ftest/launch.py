@@ -1075,6 +1075,7 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+            # HERE for the runner env
 
             # Assign the default value for transport configuration insecure mode
             os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)

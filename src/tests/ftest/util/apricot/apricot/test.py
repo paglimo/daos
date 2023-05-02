@@ -1148,8 +1148,12 @@ class TestWithServers(TestWithoutServers):
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
         manager.set_config_value("access_points", list(access_points))
+        # HERE for servers for most tests
         manager.manager.assign_environment(
-            EnvironmentVariables({"PATH": None}), True)
+            EnvironmentVariables({
+                "PATH": None,
+                "FOO": "BAR"
+            }), True)
         manager.hosts = (hosts, self.workdir, slots)
 
     @fail_on(CommandFailure)

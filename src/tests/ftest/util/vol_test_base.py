@@ -48,6 +48,7 @@ class VolTestBase(DfuseTestBase):
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
+        # HERE for vol_daos tests
         job_manager.assign_hosts(self.hostlist_clients)
         job_manager.assign_processes(client_processes)
         job_manager.assign_environment(env, True)
