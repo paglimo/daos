@@ -54,10 +54,13 @@ func NewInfoCache(log logging.Logger, cfg *Config) *InfoCache {
 
 // InfoCache is a cache for the results of expensive operations needed by the agent.
 type InfoCache struct {
-	log           logging.Logger
-	cache         cache.ItemCache
-	getAttachInfo getAttachInfoFn
-	fabricScan    fabricScanFn
+	log   logging.Logger
+	cache cache.ItemCache
+
+	ctlInvoker       control.Invoker
+	getAttachInfo    getAttachInfoFn
+	fabricScan       fabricScanFn
+	getAddrInterface func(name string) (addrFI, error)
 
 	sys             string
 	refreshInterval time.Duration
@@ -109,12 +112,16 @@ func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*contr
 		c.getAttachInfo = control.GetAttachInfo
 	}
 
+	if c.ctlInvoker == nil {
+		c.ctlInvoker = control.DefaultClient()
+	}
+
 	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
 	// cache can serve future "pbReq.AllRanks == true" requests.
 	req := new(control.GetAttachInfoReq)
 	req.SetSystem(sys)
 	req.AllRanks = true
-	resp, err := c.getAttachInfo(ctx, control.DefaultClient(), req)
+	resp, err := c.getAttachInfo(ctx, c.ctlInvoker, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", req)
 	}
@@ -165,7 +172,11 @@ func (c *InfoCache) scanFabric(ctx context.Context, providers ...string) (*NUMAF
 		return nil, errors.Wrap(err, "scanning fabric")
 	}
 
-	return NUMAFabricFromScan(ctx, c.log, fis).WithIgnoredDevices(c.ignoreIfaces), nil
+	nf := NUMAFabricFromScan(ctx, c.log, fis).WithIgnoredDevices(c.ignoreIfaces)
+	if c.getAddrInterface != nil {
+		nf.getAddrInterface = c.getAddrInterface
+	}
+	return nf, nil
 }
 
 // EnableStaticFabricCache sets up a fabric cache based on a static value that cannot be refreshed.
@@ -199,6 +210,9 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 // GetFabricDevice returns an appropriate fabric device from the cache based on the requested parameters,
 // and refreshes the cache if necessary.
 func (c *InfoCache) GetFabricDevice(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+	if c == nil {
+		return nil, errors.New("InfoCache is nil")
+	}
 	nf, err := c.getNUMAFabric(ctx, provider)
 	if err != nil {
 		return nil, err
@@ -227,5 +241,8 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, provider string) (*NUMAFa
 
 // Refresh forces any enabled, refreshable caches to re-fetch their content immediately.
 func (c *InfoCache) Refresh(ctx context.Context) error {
+	if c == nil {
+		return errors.New("InfoCache is nil")
+	}
 	return c.cache.Refresh(ctx)
 }

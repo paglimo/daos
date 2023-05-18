@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -184,7 +184,7 @@ func (m *MockNetDevClassProvider) GetNetDevClass(in string) (NetDevClass, error)
 	}
 
 	result := m.GetNetDevClassReturn[m.GetNetDevClassCalled%len(m.GetNetDevClassReturn)]
-	if in != result.ExpInput {
+	if result.ExpInput != "" && in != result.ExpInput {
 		return 0, errors.Errorf("MOCK: unexpected input %q != %q", in, result.ExpInput)
 	}
 	m.GetNetDevClassCalled++

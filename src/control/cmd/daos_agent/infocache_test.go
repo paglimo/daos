@@ -8,10 +8,12 @@ package main
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -27,6 +29,7 @@ type testInfoCacheParams struct {
 	mockScanFabric         fabricScanFn
 	disableFabricCache     bool
 	disableAttachInfoCache bool
+	ctlInvoker             control.Invoker
 }
 
 func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCacheParams) *InfoCache {
@@ -34,7 +37,13 @@ func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCachePara
 		log:           log,
 		getAttachInfo: params.mockGetAttachInfo,
 		fabricScan:    params.mockScanFabric,
-		cache:         cache.ItemCache{},
+		getAddrInterface: func(name string) (addrFI, error) {
+			return &mockNetInterface{
+				addrs: []net.Addr{&net.IPNet{IP: net.IPv4(127, 0, 0, 1)}},
+			}, nil
+		},
+		ctlInvoker: params.ctlInvoker,
+		cache:      cache.ItemCache{},
 	}
 	if !params.disableAttachInfoCache {
 		ic.EnableAttachInfoCache(0)
@@ -278,7 +287,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			expResp:    ctlResp,
 			expRemote:  true,
 		},
-		"disabled fails": {
+		"disabled fails fetch": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				return newTestInfoCache(t, l, testInfoCacheParams{
 					disableAttachInfoCache: true,
@@ -297,7 +306,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			expRemote:  true,
 			expCached:  true,
 		},
-		"enabled but empty fails": {
+		"enabled but empty fails fetch": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				return newTestInfoCache(t, l, testInfoCacheParams{})
 			},
@@ -372,9 +381,308 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 }
 
 func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
+	testSet := hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
+		Name:          "dev0",
+		NetInterfaces: common.NewStringSet("test0"),
+		DeviceClass:   hardware.Ether,
+		Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+	})
+	for name, tc := range map[string]struct {
+		getInfoCache    func(logging.Logger) *InfoCache
+		devClass        hardware.NetDevClass
+		provider        string
+		fabricResp      *hardware.FabricInterfaceSet
+		fabricErr       error
+		expResult       *FabricInterface
+		expErr          error
+		expScan         bool
+		expCachedFabric *hardware.FabricInterfaceSet
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"disabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableFabricCache: true,
+				})
+			},
+			devClass:   hardware.Ether,
+			provider:   "testprov",
+			fabricResp: testSet,
+			expScan:    true,
+			expResult: &FabricInterface{
+				Name:        "test0",
+				Domain:      "dev0",
+				NetDevClass: hardware.Ether,
+			},
+		},
+		"disabled fails fetch": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableFabricCache: true,
+				})
+			},
+			devClass:  hardware.Ether,
+			provider:  "testprov",
+			fabricErr: errors.New("mock fabric scan"),
+			expScan:   true,
+			expErr:    errors.New("mock fabric scan"),
+		},
+		"enabled but empty": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{})
+			},
+			devClass:   hardware.Ether,
+			provider:   "testprov",
+			fabricResp: testSet,
+			expScan:    true,
+			expResult: &FabricInterface{
+				Name:        "test0",
+				Domain:      "dev0",
+				NetDevClass: hardware.Ether,
+			},
+			expCachedFabric: testSet,
+		},
+		"enabled but empty fails fetch": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{})
+			},
+			devClass:  hardware.Ether,
+			provider:  "testprov",
+			fabricErr: errors.New("mock fabric scan"),
+			expScan:   true,
+			expErr:    errors.New("mock fabric scan"),
+		},
+		"enabled and cached": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				ic := newTestInfoCache(t, l, testInfoCacheParams{})
+				nf := NUMAFabricFromScan(test.Context(t), l, testSet)
+				nf.getAddrInterface = ic.getAddrInterface
+				ic.cache.Set(fabricKey, cache.NewItem(nf))
+				return ic
+			},
+			devClass:  hardware.Ether,
+			provider:  "testprov",
+			fabricErr: errors.New("shouldn't call scan"),
+			expResult: &FabricInterface{
+				Name:        "test0",
+				Domain:      "dev0",
+				NetDevClass: hardware.Ether,
+			},
+			expCachedFabric: hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
+				Name:          "dev0",
+				NetInterfaces: common.NewStringSet("test0"),
+				DeviceClass:   hardware.Ether,
+				Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+			}),
+		},
+		"bad data type": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				ic := newTestInfoCache(t, l, testInfoCacheParams{})
+				ic.cache.Set(fabricKey, cache.NewItem("garbage"))
+				return ic
+			},
+			devClass:  hardware.Ether,
+			provider:  "testprov",
+			fabricErr: errors.New("shouldn't call scan"),
+			expErr:    errors.New("data type"),
+		},
+		"requested not found": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				ic := newTestInfoCache(t, l, testInfoCacheParams{})
+				nf := NUMAFabricFromScan(test.Context(t), l, testSet)
+				nf.getAddrInterface = ic.getAddrInterface
+				ic.cache.Set(fabricKey, cache.NewItem(nf))
+				return ic
+			},
+			devClass:  hardware.Ether,
+			provider:  "bad",
+			fabricErr: errors.New("shouldn't call scan"),
+			expErr:    errors.New("no suitable fabric interface"),
+			expCachedFabric: hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
+				Name:          "dev0",
+				NetInterfaces: common.NewStringSet("test0"),
+				DeviceClass:   hardware.Ether,
+				Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+			}),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
+			var ic *InfoCache
+			if tc.getInfoCache != nil {
+				ic = tc.getInfoCache(log)
+			}
+
+			calledScan := false
+			if ic != nil {
+				ic.fabricScan = func(_ context.Context, _ ...string) (*hardware.FabricInterfaceSet, error) {
+					calledScan = true
+					return tc.fabricResp, tc.fabricErr
+				}
+			}
+
+			result, err := ic.GetFabricDevice(test.Context(t), 0, tc.devClass, tc.provider)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
+				t.Fatalf("want-, got+:\n%s", diff)
+			}
+
+			test.AssertEqual(t, tc.expScan, calledScan, "")
+
+			if ic == nil {
+				return
+			}
+
+			if tc.expCachedFabric != nil {
+				data, err := ic.cache.Get(test.Context(t), fabricKey)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				cached, ok := data.(*NUMAFabric)
+				test.AssertTrue(t, ok, "bad cached data type")
+
+				expNF := NUMAFabricFromScan(test.Context(t), log, tc.expCachedFabric)
+				if diff := cmp.Diff(expNF.numaMap, cached.numaMap, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
+					t.Fatalf("want-, got+:\n%s", diff)
+				}
+			}
+		})
+	}
 }
 
 func TestAgent_InfoCache_Refresh(t *testing.T) {
+	ctlResp := &control.GetAttachInfoResp{
+		System:       "dontcare",
+		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
+		MSRanks:      []uint32{0, 1, 2, 3},
+		ClientNetHint: control.ClientNetworkHint{
+			Provider:    "ofi+tcp",
+			NetDevClass: uint32(hardware.Ether),
+		},
+	}
 
+	testSet := hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
+		Name:          "dev0",
+		NetInterfaces: common.NewStringSet("test0"),
+		DeviceClass:   hardware.Ether,
+		Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+	})
+
+	for name, tc := range map[string]struct {
+		getInfoCache        func(logging.Logger) *InfoCache
+		attachInfoResp      *control.GetAttachInfoResp
+		attachInfoErr       error
+		fabricResp          *hardware.FabricInterfaceSet
+		fabricErr           error
+		expErr              error
+		expScan             bool
+		expRemote           bool
+		expCachedFabric     *hardware.FabricInterfaceSet
+		expCachedAttachInfo *control.GetAttachInfoResp
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"both disabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableFabricCache:     true,
+					disableAttachInfoCache: true,
+				})
+			},
+		},
+		"both enabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{})
+			},
+			attachInfoResp:      ctlResp,
+			fabricResp:          testSet,
+			expScan:             true,
+			expRemote:           true,
+			expCachedFabric:     testSet,
+			expCachedAttachInfo: ctlResp,
+		},
+		"fabric disabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableFabricCache: true,
+				})
+			},
+			attachInfoResp:      ctlResp,
+			fabricErr:           errors.New("should not call scan"),
+			expRemote:           true,
+			expCachedAttachInfo: ctlResp,
+		},
+		"attach info disabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableAttachInfoCache: true,
+				})
+			},
+			attachInfoErr:   errors.New("should not call remote"),
+			fabricResp:      testSet,
+			expScan:         true,
+			expCachedFabric: testSet,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var ic *InfoCache
+			if tc.getInfoCache != nil {
+				ic = tc.getInfoCache(log)
+			}
+
+			calledScan := false
+			calledRemote := false
+			if ic != nil {
+				ic.fabricScan = func(_ context.Context, _ ...string) (*hardware.FabricInterfaceSet, error) {
+					calledScan = true
+					return tc.fabricResp, tc.fabricErr
+				}
+				ic.getAttachInfo = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					calledRemote = true
+					return tc.attachInfoResp, tc.attachInfoErr
+				}
+			}
+
+			err := ic.Refresh(test.Context(t))
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expScan, calledScan, "")
+			test.AssertEqual(t, tc.expRemote, calledRemote, "")
+
+			if tc.expCachedFabric != nil {
+				data, err := ic.cache.Get(test.Context(t), fabricKey)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				cached, ok := data.(*NUMAFabric)
+				test.AssertTrue(t, ok, "bad cached data type")
+
+				expNF := NUMAFabricFromScan(test.Context(t), log, tc.expCachedFabric)
+				if diff := cmp.Diff(expNF.numaMap, cached.numaMap, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
+					t.Fatalf("want-, got+:\n%s", diff)
+				}
+			}
+
+			if tc.expCachedAttachInfo != nil {
+				cached, err := ic.cache.Get(test.Context(t), attachInfoKey)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if diff := cmp.Diff(tc.expCachedAttachInfo, cached); diff != "" {
+					t.Fatalf("want-, got+:\n%s", diff)
+				}
+			}
+		})
+	}
 }
