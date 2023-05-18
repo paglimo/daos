@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -22,84 +21,45 @@ type Item interface {
 	Lock()
 	Unlock()
 	Key() string
-	Refresh(ctx context.Context, force bool) error
-	RefreshInterval() time.Duration
+	Refresh(ctx context.Context) error
+	NeedsRefresh() bool
 }
 
 // ItemCache is a mechanism for caching Items to keys.
 type ItemCache struct {
-	log             logging.Logger
-	mutex           sync.RWMutex
-	items           map[string]Item
-	newItemChan     chan Item
-	refreshItemChan chan Item
+	log   logging.Logger
+	mutex sync.RWMutex
+	items map[string]Item
 }
 
-func NewItemCache(ctx context.Context, log logging.Logger) *ItemCache {
+// NewItemCache creates a new ItemCache.
+func NewItemCache(log logging.Logger) *ItemCache {
 	c := &ItemCache{
-		log:             log,
-		items:           make(map[string]Item),
-		newItemChan:     make(chan Item),
-		refreshItemChan: make(chan Item),
+		log:   log,
+		items: make(map[string]Item),
 	}
-
-	go c.refreshLoop(ctx)
 	return c
-}
-
-func itemRefreshLoop(ctx context.Context, refreshChan chan Item, item Item) {
-	if item.RefreshInterval() == 0 {
-		return
-	}
-
-	ticker := time.NewTicker(item.RefreshInterval())
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			refreshChan <- item
-		}
-	}
-}
-
-func (ic *ItemCache) refreshLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case item := <-ic.newItemChan:
-			go itemRefreshLoop(ctx, ic.refreshItemChan, item)
-		case item := <-ic.refreshItemChan:
-			ic.log.Debugf("refreshing %q after %s", item.Key(), item.RefreshInterval())
-			if err := item.Refresh(ctx, true); err != nil {
-				ic.log.Errorf("refreshing %q: %v", item.Key(), err)
-			}
-		}
-	}
 }
 
 // Set caches an item under a given key.
 func (ic *ItemCache) Set(ctx context.Context, item Item) error {
-	if ic == nil || common.InterfaceIsNil(item) || item.Key() == "" {
-		return errors.New("invalid arguments")
+	if ic == nil {
+		return errors.New("ItemCache is nil")
+	}
+
+	if common.InterfaceIsNil(item) || item.Key() == "" {
+		return errors.New("invalid item")
 	}
 
 	ic.mutex.Lock()
 	defer ic.mutex.Unlock()
 
-	return ic.set(ctx, item)
+	ic.set(ctx, item)
+	return nil
 }
 
-func (ic *ItemCache) set(ctx context.Context, item Item) error {
+func (ic *ItemCache) set(ctx context.Context, item Item) {
 	ic.items[item.Key()] = item
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case ic.newItemChan <- item:
-		return nil
-	}
 }
 
 // Delete fully deletes an Item from the cache.
@@ -137,11 +97,6 @@ func (e *errKeyNotFound) Error() string {
 	return fmt.Sprintf("key %q not found", e.key)
 }
 
-func isKeyNotFound(err error) bool {
-	_, ok := err.(*errKeyNotFound)
-	return ok
-}
-
 func noopRelease() {}
 
 // GetOrCreate returns an item from the cache if it exists, otherwise it creates
@@ -149,11 +104,15 @@ func noopRelease() {}
 // by the caller when it is safe to be modified.
 func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCreateFunc) (Item, func(), error) {
 	if ic == nil {
-		return nil, noopRelease, errors.New("ItemCache is nil")
+		return nil, noopRelease, errors.New("nil ItemCache")
 	}
 
 	if key == "" {
 		return nil, noopRelease, errors.Errorf("empty string is an invalid key")
+	}
+
+	if missFn == nil {
+		return nil, noopRelease, errors.Errorf("item create function is required")
 	}
 
 	ic.mutex.Lock()
@@ -161,20 +120,20 @@ func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCre
 
 	item, err := ic.get(key)
 	if err != nil {
-		if !isKeyNotFound(err) {
-			return nil, noopRelease, err
-		}
+		ic.log.Debugf("failed to get item for key %q: %s", key, err.Error())
 		item, err = missFn()
 		if err != nil {
 			return nil, noopRelease, errors.Wrapf(err, "create item for %q", key)
 		}
-		if err := ic.set(ctx, item); err != nil {
-			return nil, noopRelease, errors.Wrapf(err, "set item for %q", key)
-		}
+		ic.log.Debugf("created item for key %q", key)
+		ic.set(ctx, item)
 	}
 
-	if err := item.Refresh(ctx, false); err != nil {
-		return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
+	if item.NeedsRefresh() {
+		if err := item.Refresh(ctx); err != nil {
+			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
+		}
+		ic.log.Debugf("refreshed item %q", key)
 	}
 	item.Lock()
 
@@ -188,6 +147,10 @@ func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) 
 		return nil, noopRelease, errors.New("nil ItemCache")
 	}
 
+	if key == "" {
+		return nil, noopRelease, errors.Errorf("empty string is an invalid key")
+	}
+
 	ic.mutex.RLock()
 	defer ic.mutex.RUnlock()
 
@@ -196,8 +159,11 @@ func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) 
 		return nil, noopRelease, err
 	}
 
-	if err := item.Refresh(ctx, false); err != nil {
-		return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
+	if item.NeedsRefresh() {
+		if err := item.Refresh(ctx); err != nil {
+			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
+		}
+		ic.log.Debugf("refreshed item %q", key)
 	}
 	item.Lock()
 
@@ -222,7 +188,9 @@ func (ic *ItemCache) Refresh(ctx context.Context) error {
 	defer ic.mutex.Unlock()
 
 	for _, item := range ic.items {
-		item.Refresh(ctx, true)
+		if err := item.Refresh(ctx); err != nil {
+			return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
+		}
 	}
 	return nil
 }

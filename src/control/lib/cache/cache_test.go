@@ -6,213 +6,122 @@
 
 package cache
 
-/*
-type testData string
+import (
+	"context"
+	"testing"
 
-func (c testData) Copy() Data {
-	return c
-}
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
+)
 
-func TestCache_Item_Data(t *testing.T) {
-	for name, tc := range map[string]struct {
-		item      *Item
-		expResult Data
-	}{
-		"nil item": {},
-		"empty item": {
-			item: &Item{},
-		},
-		"cached": {
-			item: &Item{
-				data: testData("my test string"),
-			},
-			expResult: testData("my test string"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			result := tc.item.Data()
+func TestCache_NewItemCache(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
 
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
-			}
-		})
+	ic := NewItemCache(log)
+
+	if ic == nil {
+		t.Fatal("failed to create ItemCache")
+	}
+
+	if ic.items == nil {
+		t.Fatal("didn't set up item map")
+	}
+
+	if ic.log != log {
+		t.Fatal("didn't preserve logger")
 	}
 }
 
-func TestCache_Item_SetData(t *testing.T) {
-	for name, tc := range map[string]struct {
-		item *Item
-		data Data
-	}{
-		"nil item": { // all we care about is this doesn't crash
-			data: testData("something"),
-		},
-		"no data": {
-			item: &Item{},
-			data: testData("something"),
-		},
-		"override data": {
-			item: &Item{
-				data: testData("something"),
-			},
-			data: testData("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			tc.item.SetData(tc.data)
-
-			if tc.item == nil {
-				return
-			}
-
-			data := tc.item.Data()
-			if diff := cmp.Diff(tc.data, data); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
-			}
-		})
-	}
+type mockItem struct {
+	ItemKey            string
+	ID                 string
+	RefreshErr         error
+	NeedsRefreshResult bool
 }
 
-func TestCache_Item_Fetch(t *testing.T) {
-	for name, tc := range map[string]struct {
-		item    *Item
-		expErr  error
-		expData Data
-	}{
-		"nil item": {
-			expErr: errors.New("nil"),
-		},
-		"nil fetch function": {
-			item: &Item{},
-		},
-		"fetch function failed": {
-			item: &Item{
-				getFreshData: func(_ context.Context) (Data, error) {
-					return nil, errors.New("mock getFreshData")
-				},
-			},
-			expErr: errors.New("mock getFreshData"),
-		},
-		"success": {
-			item: &Item{
-				getFreshData: func(_ context.Context) (Data, error) {
-					return testData("fresh content!"), nil
-				},
-			},
-			expData: testData("fresh content!"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			err := tc.item.FetchData(context.Background())
+func (m *mockItem) Lock() {}
 
-			test.CmpErr(t, tc.expErr, err)
+func (m *mockItem) Unlock() {}
 
-			if tc.item == nil {
-				return
-			}
-
-			data := tc.item.Data()
-			if diff := cmp.Diff(tc.expData, data); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
-			}
-		})
-	}
+func (m *mockItem) Key() string {
+	return m.ItemKey
 }
 
-func TestCache_Item_NeedsFetch(t *testing.T) {
-	testFetchFn := func(_ context.Context) (Data, error) {
-		return testData("something"), nil
-	}
+func (m *mockItem) Refresh(ctx context.Context) error {
+	return m.RefreshErr
+}
 
-	for name, tc := range map[string]struct {
-		item      *Item
-		expResult bool
-	}{
-		"nil item": {},
-		"no fetch function": {
-			item: &Item{},
-		},
-		"never cached": {
-			item: &Item{
-				getFreshData: testFetchFn,
-			},
-			expResult: true,
-		},
-		"no refresh interval": {
-			item: &Item{
-				getFreshData: testFetchFn,
-				lastCache:    time.Date(1998, time.July, 6, 12, 0, 0, 0, time.Local),
-			},
-		},
-		"refresh interval hasn't passed": {
-			item: &Item{
-				getFreshData:    testFetchFn,
-				lastCache:       time.Now(),
-				refreshInterval: time.Minute,
-			},
-		},
-		"refresh interval has passed": {
-			item: &Item{
-				getFreshData:    testFetchFn,
-				lastCache:       time.Now().Add(-time.Minute),
-				refreshInterval: time.Minute,
-			},
-			expResult: true,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, tc.item.NeedsFetch(), "")
-		})
+func (m *mockItem) NeedsRefresh() bool {
+	return m.NeedsRefreshResult
+}
+
+func testMockItem(id ...string) *mockItem {
+	mock := &mockItem{ItemKey: "mock"}
+	if len(id) > 0 {
+		mock.ID = id[0]
 	}
+	return mock
 }
 
 func TestCache_ItemCache_Set(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ic        *ItemCache
-		key       string
-		val       *Item
-		expCached bool
+		nilCache      bool
+		alreadyCached map[string]Item
+		val           *mockItem
+		expErr        error
+		expCached     bool
 	}{
-		"nil cache": { // all we care about in this case is that it doesn't crash
-			key: "key",
-			val: NewItem(testData("value")),
+		"nil cache": {
+			nilCache: true,
+			val:      testMockItem(),
+			expErr:   errors.New("nil"),
+		},
+		"nil item": {
+			expErr: errors.New("invalid item"),
 		},
 		"empty key": {
-			ic:  &ItemCache{},
-			val: NewItem(testData("value")),
+			val:    &mockItem{},
+			expErr: errors.New("invalid item"),
 		},
 		"cached": {
-			ic:        &ItemCache{},
-			key:       "key",
-			val:       NewItem(testData("value")),
+			val:       testMockItem(),
 			expCached: true,
 		},
 		"overwrite": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"key": NewItem(testData("old value")),
-				},
+			alreadyCached: map[string]Item{
+				"mock": testMockItem("old"),
 			},
-			key:       "key",
-			val:       NewItem(testData("value")),
+			val:       testMockItem("new"),
 			expCached: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.ic.Set(tc.key, tc.val)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-			if tc.ic == nil {
+			var ic *ItemCache
+			if !tc.nilCache {
+				ic = NewItemCache(log)
+			}
+			err := ic.Set(test.Context(t), tc.val)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if ic == nil || tc.val == nil {
 				return
 			}
 
-			item, ok := tc.ic.items[tc.key]
-
+			item, ok := ic.items[tc.val.ItemKey]
 			if tc.expCached {
 				if !ok {
-					t.Fatalf("expected %q to be cached", tc.key)
+					t.Fatalf("expected %q to be cached", tc.val.ItemKey)
 				}
 
-				if diff := cmp.Diff(tc.val.data, item.data); diff != "" {
+				if diff := cmp.Diff(tc.val, item); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else {
@@ -220,7 +129,7 @@ func TestCache_ItemCache_Set(t *testing.T) {
 					return
 				}
 
-				if diff := cmp.Diff(tc.val.data, item.data); diff == "" {
+				if diff := cmp.Diff(tc.val, item); diff == "" {
 					t.Fatalf("value was not supposed to be cached")
 				}
 			}
@@ -228,71 +137,195 @@ func TestCache_ItemCache_Set(t *testing.T) {
 	}
 }
 
-func TestCache_ItemCache_Get(t *testing.T) {
+func TestCache_ItemCache_GetOrCreate(t *testing.T) {
+	defaultCreate := func() (Item, error) {
+		return testMockItem("default"), nil
+	}
+
 	for name, tc := range map[string]struct {
-		ic        *ItemCache
-		key       string
-		expResult Data
-		expErr    error
+		nilCache      bool
+		key           string
+		createFunc    ItemCreateFunc
+		alreadyCached map[string]Item
+		expResult     Item
+		expErr        error
 	}{
-		"nil cache": {
-			key:    "something",
-			expErr: errors.New("nil"),
+		"nil": {
+			nilCache:   true,
+			key:        "mock",
+			createFunc: defaultCreate,
+			expErr:     errors.New("nil"),
 		},
 		"empty key": {
-			ic:     &ItemCache{},
-			expErr: errors.New("invalid key"),
+			key:        "",
+			createFunc: defaultCreate,
+			expErr:     errors.New("invalid key"),
 		},
-		"no match": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"a": NewItem(testData("alpha")),
-					"b": NewItem(testData("beta")),
-					"c": NewItem(testData("gamma")),
-				},
-			},
-			key:    "d",
-			expErr: errors.New("not found"),
+		"nil create func": {
+			key:    "mock",
+			expErr: errors.New("create function is required"),
 		},
-		"success": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"a": NewItem(testData("alpha")),
-					"b": NewItem(testData("beta")),
-					"c": NewItem(testData("gamma")),
-				},
+		"cached": {
+			key: "mock",
+			createFunc: func() (Item, error) {
+				return nil, errors.New("shouldn't call create")
 			},
-			key:       "c",
-			expResult: testData("gamma"),
+			alreadyCached: map[string]Item{
+				"mock": testMockItem("cached"),
+			},
+			expResult: testMockItem("cached"),
 		},
-		"fetch": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"a": NewFetchableItem(0, func(ctx context.Context) (Data, error) {
-						return testData("alpha"), nil
-					}),
-				},
+		"create func failed": {
+			key: "mock",
+			createFunc: func() (Item, error) {
+				return nil, errors.New("mock create")
 			},
-			key:       "a",
-			expResult: testData("alpha"),
+			expErr: errors.New("mock create"),
 		},
-		"fetch failed": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"a": NewFetchableItem(0, func(ctx context.Context) (Data, error) {
-						return nil, errors.New("mock fetch")
-					}),
-				},
+		"created": {
+			key:        "mock",
+			createFunc: defaultCreate,
+			expResult:  testMockItem("default"),
+		},
+		"refresh failed": {
+			key: "mock",
+			createFunc: func() (Item, error) {
+				mi := testMockItem("default")
+				mi.NeedsRefreshResult = true
+				mi.RefreshErr = errors.New("mock item refresh")
+				return mi, nil
 			},
-			key:    "a",
-			expErr: errors.New("mock fetch"),
+			expErr: errors.New("mock item refresh"),
+		},
+		"refresh success": {
+			key: "mock",
+			createFunc: func() (Item, error) {
+				mi := testMockItem("default")
+				mi.NeedsRefreshResult = true
+				return mi, nil
+			},
+			expResult: &mockItem{
+				ItemKey:            "mock",
+				ID:                 "default",
+				NeedsRefreshResult: true,
+			},
+		},
+		"no refresh needed": {
+			key: "mock",
+			createFunc: func() (Item, error) {
+				return &mockItem{
+					ItemKey:    "mock",
+					ID:         "default",
+					RefreshErr: errors.New("should not call refresh"),
+				}, nil
+			},
+			expResult: testMockItem("default"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := tc.ic.Get(context.Background(), tc.key)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var ic *ItemCache
+			if !tc.nilCache {
+				ic = NewItemCache(log)
+				if tc.alreadyCached != nil {
+					ic.items = tc.alreadyCached
+				}
+			}
+
+			result, cleanup, err := ic.GetOrCreate(test.Context(t), tc.key, tc.createFunc)
+
+			if cleanup == nil {
+				t.Fatal("expected non-nil cleanup function")
+			}
+			defer cleanup()
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreFields(mockItem{}, "RefreshErr")); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCache_ItemCache_Get(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilCache      bool
+		key           string
+		alreadyCached map[string]Item
+		expResult     Item
+		expErr        error
+	}{
+		"nil": {
+			nilCache: true,
+			key:      "mock",
+			expErr:   errors.New("nil"),
+		},
+		"empty key": {
+			key:    "",
+			expErr: errors.New("invalid key"),
+		},
+		"missing": {
+			key:    "mock",
+			expErr: &errKeyNotFound{key: "mock"},
+		},
+		"refresh failed": {
+			key: "mock",
+			alreadyCached: map[string]Item{
+				"mock": &mockItem{
+					ItemKey:            "mock",
+					NeedsRefreshResult: true,
+					RefreshErr:         errors.New("mock item refresh"),
+				},
+			},
+			expErr: errors.New("mock item refresh"),
+		},
+		"refresh success": {
+			key: "mock",
+			alreadyCached: map[string]Item{
+				"mock": &mockItem{
+					ItemKey:            "mock",
+					NeedsRefreshResult: true,
+				},
+			},
+			expResult: &mockItem{
+				ItemKey:            "mock",
+				NeedsRefreshResult: true,
+			},
+		},
+		"no refresh needed": {
+			key: "mock",
+			alreadyCached: map[string]Item{
+				"mock": &mockItem{
+					ItemKey:    "mock",
+					RefreshErr: errors.New("should not call refresh"),
+				},
+			},
+			expResult: testMockItem(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var ic *ItemCache
+			if !tc.nilCache {
+				ic = NewItemCache(log)
+				if tc.alreadyCached != nil {
+					ic.items = tc.alreadyCached
+				}
+			}
+
+			result, cleanup, err := ic.Get(test.Context(t), tc.key)
+
+			if cleanup == nil {
+				t.Fatal("expected non-nil cleanup function")
+			}
+			defer cleanup()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreFields(mockItem{}, "RefreshErr")); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
 		})
@@ -301,101 +334,45 @@ func TestCache_ItemCache_Get(t *testing.T) {
 
 func TestCache_ItemCache_Refresh(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ic      *ItemCache
-		expErr  error
-		expData map[string]Data
+		nilCache bool
+		cache    map[string]Item
+		expErr   error
 	}{
 		"nil": {
-			expErr: errors.New("nil"),
+			nilCache: true,
+			expErr:   errors.New("nil"),
 		},
-		"empty": {
-			ic:      &ItemCache{},
-			expData: map[string]Data{},
-		},
-		"non-fetchable item": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"one": NewItem(testData("item 1")),
+		"no items": {},
+		"refresh fails": {
+			cache: map[string]Item{
+				"mock": &mockItem{
+					ItemKey:    "mock",
+					RefreshErr: errors.New("mock refresh"),
 				},
 			},
-			expData: map[string]Data{
-				"one": testData("item 1"),
-			},
-		},
-		"fetch fails": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"one": NewFetchableItem(0, func(ctx context.Context) (Data, error) {
-						return nil, errors.New("mock fetch")
-					}),
-				},
-			},
-			expErr: errors.New("mock fetch"),
-			expData: map[string]Data{
-				"one": nil,
-			},
+			expErr: errors.New("mock refresh"),
 		},
 		"success": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"one": NewFetchableItem(0, func(ctx context.Context) (Data, error) {
-						return testData("new data1"), nil
-					}),
-					"two": NewFetchableItem(0, func(ctx context.Context) (Data, error) {
-						return testData("new data2"), nil
-					}),
-					"three": NewItem(testData("static data3")),
-					"four": NewFetchableItem(0, func(ctx context.Context) (Data, error) {
-						return testData("new data4"), nil
-					}),
-				},
-			},
-			expData: map[string]Data{
-				"one":   testData("new data1"),
-				"two":   testData("new data2"),
-				"three": testData("static data3"),
-				"four":  testData("new data4"),
-			},
-		},
-		"ignores refresh interval": {
-			ic: &ItemCache{
-				items: map[string]*Item{
-					"one": {
-						lastCache:       time.Now(),
-						refreshInterval: time.Hour,
-						getFreshData: func(ctx context.Context) (Data, error) {
-							return testData("new data1"), nil
-						},
-					},
-				},
-			},
-			expData: map[string]Data{
-				"one": testData("new data1"),
+			cache: map[string]Item{
+				"mock": testMockItem(),
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx, cleanup := context.WithCancel(context.Background())
-			t.Cleanup(cleanup)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-			err := tc.ic.Refresh(ctx)
-
-			test.CmpErr(t, tc.expErr, err)
-
-			if tc.ic != nil {
-				test.AssertEqual(t, len(tc.expData), len(tc.ic.items), "")
-
-				for key, expData := range tc.expData {
-					item, exists := tc.ic.items[key]
-					if !exists {
-						t.Fatalf("expected item %q not found", key)
-					}
-
-					if diff := cmp.Diff(expData, item.data); diff != "" {
-						t.Fatalf("-want, +got:\n%s", diff)
-					}
+			var ic *ItemCache
+			if !tc.nilCache {
+				ic = NewItemCache(log)
+				if tc.cache != nil {
+					ic.items = tc.cache
 				}
 			}
+
+			err := ic.Refresh(test.Context(t))
+
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -411,15 +388,15 @@ func TestCache_ItemCache_Has(t *testing.T) {
 		},
 		"empty": {
 			ic:  &ItemCache{},
-			key: "mykey",
+			key: "mock",
 		},
 		"success": {
 			ic: &ItemCache{
-				items: map[string]*Item{
-					"mykey": NewItem("something"),
+				items: map[string]Item{
+					"mock": testMockItem(),
 				},
 			},
-			key:       "mykey",
+			key:       "mock",
 			expResult: true,
 		},
 	} {
@@ -431,9 +408,9 @@ func TestCache_ItemCache_Has(t *testing.T) {
 
 func TestCache_ItemCache_Delete(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ic      *ItemCache
-		key     string
-		expData map[string]Data
+		ic       *ItemCache
+		key      string
+		expCache map[string]Item
 	}{
 		"nil": {
 			key: "dontcare",
@@ -444,31 +421,31 @@ func TestCache_ItemCache_Delete(t *testing.T) {
 		},
 		"key not found": {
 			ic: &ItemCache{
-				items: map[string]*Item{
-					"one":   NewItem("1"),
-					"two":   NewItem("2"),
-					"three": NewItem("3"),
+				items: map[string]Item{
+					"one":   testMockItem("1"),
+					"two":   testMockItem("2"),
+					"three": testMockItem("3"),
 				},
 			},
 			key: "four",
-			expData: map[string]Data{
-				"one":   "1",
-				"two":   "2",
-				"three": "3",
+			expCache: map[string]Item{
+				"one":   testMockItem("1"),
+				"two":   testMockItem("2"),
+				"three": testMockItem("3"),
 			},
 		},
 		"success": {
 			ic: &ItemCache{
-				items: map[string]*Item{
-					"one":   NewItem("1"),
-					"two":   NewItem("2"),
-					"three": NewItem("3"),
+				items: map[string]Item{
+					"one":   testMockItem("1"),
+					"two":   testMockItem("2"),
+					"three": testMockItem("3"),
 				},
 			},
 			key: "two",
-			expData: map[string]Data{
-				"one":   "1",
-				"three": "3",
+			expCache: map[string]Item{
+				"one":   testMockItem("1"),
+				"three": testMockItem("3"),
 			},
 		},
 	} {
@@ -476,20 +453,10 @@ func TestCache_ItemCache_Delete(t *testing.T) {
 			tc.ic.Delete(tc.key)
 
 			if tc.ic != nil {
-				test.AssertEqual(t, len(tc.expData), len(tc.ic.items), "")
-
-				for key, expData := range tc.expData {
-					item, exists := tc.ic.items[key]
-					if !exists {
-						t.Fatalf("expected item %q not found", key)
-					}
-
-					if diff := cmp.Diff(expData, item.data); diff != "" {
-						t.Fatalf("-want, +got:\n%s", diff)
-					}
+				if diff := cmp.Diff(tc.expCache, tc.ic.items); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			}
 		})
 	}
 }
-*/
