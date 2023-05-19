@@ -488,7 +488,7 @@
    fun:fi_tsend
 }
 {
-   Tcp provider with ofi rxm 2
+   Tcp provider on fi_tsend
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
    fun:sendmsg
@@ -496,6 +496,17 @@
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
+   ...
+}
+{
+   Tcp provider on fi_senddata
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_senddata
    ...
 }
 {
