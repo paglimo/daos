@@ -112,4 +112,6 @@ if ! eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}"           \
      eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}"           \
           ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug*           \
           "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS --dnf-cmd repoquery | sort
+    cat /var/lib/mock/rocky+epel-9-x86_64/root/etc/dnf/dnf.conf
+    exit 1
 fi
