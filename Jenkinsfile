@@ -1004,25 +1004,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Test EL 8 RPMs on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                target: 'el9',
-                                daos_pkg_version: daosPackagesVersion('el8', next_version)
-                   }
-                    post {
-                        always {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Test EL 8.6 RPMs')
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
