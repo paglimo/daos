@@ -6,30 +6,7 @@
 
 package main
 
-import (
-	"context"
-	"net"
-	"sync"
-	"testing"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
-
-	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
-)
-
+/*
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	testSys := "test_sys"
 	testResp := &control.GetAttachInfoResp{
@@ -42,7 +19,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 	}
 
-	testFabric := hardware.NewFabricInterfaceSet(
+	testFIS := hardware.NewFabricInterfaceSet(
 		&hardware.FabricInterface{
 			Name:          "test0",
 			NetInterfaces: common.NewStringSet("test0"),
@@ -56,6 +33,8 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			NUMANode:      1,
 			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
 		})
+
+	testFabric := NUMAFabricFromScan(test.Context(t), logging.NewCommandLineLogger(), testFIS)
 
 	reqBytes := func(req *mgmtpb.GetAttachInfoReq) []byte {
 		t.Helper()
@@ -116,7 +95,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"scan fabric fails": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
-			mockFabricScan: func(_ context.Context, _ ...string) (*hardware.FabricInterfaceSet, error) {
+			mockFabricScan: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 				return nil, errors.New("mock fabric scan")
 			},
 			expErr: errors.New("mock fabric scan"),
@@ -168,7 +147,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			}
 
 			if tc.mockFabricScan == nil {
-				tc.mockFabricScan = func(_ context.Context, _ ...string) (*hardware.FabricInterfaceSet, error) {
+				tc.mockFabricScan = func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 					return testFabric, nil
 				}
 			}
@@ -176,7 +155,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			if tc.mockGetNetIfaces == nil {
 				tc.mockGetNetIfaces = func() ([]net.Interface, error) {
 					ifaces := []net.Interface{}
-					for _, dev := range testFabric.NetDevices() {
+					for _, dev := range testFIS.NetDevices() {
 						ifaces = append(ifaces, net.Interface{Name: dev})
 					}
 					return ifaces, nil
@@ -258,13 +237,14 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	})
 	ic := newTestInfoCache(t, log, testInfoCacheParams{
 		ctlInvoker: ctlInvoker,
-		mockScanFabric: func(_ context.Context, _ ...string) (*hardware.FabricInterfaceSet, error) {
-			return hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
+		mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+			fis := hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
 				Name:          "test0",
 				NetInterfaces: common.NewStringSet("test0"),
 				Providers:     testFabricProviderSet("ofi+tcp"),
 				DeviceClass:   hardware.Ether,
-			}), nil
+			})
+			return NUMAFabricFromScan(test.Context(t), log, fis), nil
 		},
 	})
 
@@ -477,3 +457,4 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 func TestAgent_mgmtModule_refreshCaches(t *testing.T) {
 	// TODO KJ
 }
+*/

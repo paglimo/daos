@@ -37,7 +37,7 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 		log:          log,
 		ignoreIfaces: cfg.ExcludeFabricIfaces,
 		client:       client,
-		cache:        cache.NewItemCache(ctx, log),
+		cache:        cache.NewItemCache(log),
 	}
 
 	if cfg.DisableCache {
@@ -61,18 +61,15 @@ type cacheItem struct {
 	refreshInterval time.Duration
 }
 
-// Override this to return 0 for items that shouldn't be auto-refreshed,
-// but could be refreshed if requested after a certain period of time,
-// e.g. PoolFindByLabel.
-func (ci *cacheItem) RefreshInterval() time.Duration {
-	return ci.refreshInterval
-}
-
 func (ci *cacheItem) isStale() bool {
 	if ci.refreshInterval == 0 {
 		return false
 	}
 	return ci.lastCached.Add(ci.refreshInterval).Before(time.Now())
+}
+
+func (ci *cacheItem) isCached() bool {
+	return !ci.lastCached.Equal(time.Time{})
 }
 
 type cachedAttachInfo struct {
@@ -98,17 +95,33 @@ func sysAttachInfoKey(sys string) string {
 	return attachInfoKey + "-" + sys
 }
 
+// Key returns the key for this system-specific instance of GetAttachInfo.
 func (ci *cachedAttachInfo) Key() string {
+	if ci == nil {
+		return ""
+	}
+	if ci.system == "" {
+		return attachInfoKey
+	}
 	return sysAttachInfoKey(ci.system)
 }
 
-func (ci *cachedAttachInfo) Refresh(ctx context.Context, force bool) error {
+// NeedsRefresh checks whether the cached data needs to be refreshed.
+func (ci *cachedAttachInfo) NeedsRefresh() bool {
+	if ci == nil {
+		return false
+	}
+	return !ci.isCached() || ci.isStale()
+}
+
+// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
+func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+	if ci == nil {
+		return errors.New("cachedAttachInfo is nil")
+	}
+
 	ci.Lock()
 	defer ci.Unlock()
-
-	if !force && ci.lastResponse != nil && !ci.isStale() {
-		return nil
-	}
 
 	req := &control.GetAttachInfoReq{System: ci.system, AllRanks: true}
 	resp, err := ci.refreshFn(ctx, ci.rpcClient, req)
@@ -140,17 +153,28 @@ func newCachedFabricInfo(log logging.Logger, ignoredIfaces common.StringSet, pro
 	}
 }
 
+// Key returns the cache key for the fabric information.
 func (cfi *cachedFabricInfo) Key() string {
 	return fabricKey
 }
 
-func (cfi *cachedFabricInfo) Refresh(ctx context.Context, force bool) error {
+// NeedsRefresh indicates that the fabric information does not need to be refreshed unless it has
+// never been populated.
+func (cfi *cachedFabricInfo) NeedsRefresh() bool {
+	if cfi == nil {
+		return false
+	}
+	return !cfi.isCached()
+}
+
+// Refresh scans the hardware for information about the fabric devices and caches the result.
+func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
+	if cfi == nil {
+		return errors.New("cachedFabricInfo is nil")
+	}
+
 	cfi.Lock()
 	defer cfi.Unlock()
-
-	if !force && cfi.lastResults != nil && !cfi.isStale() {
-		return nil
-	}
 
 	results, err := cfi.refreshFn(ctx)
 	if err != nil {
@@ -169,6 +193,7 @@ type InfoCache struct {
 	fabricCacheDisabled atm.Bool
 	getAttachInfo       getAttachInfoFn
 	fabricScan          fabricScanFn
+	getAddrInterface    func(name string) (addrFI, error)
 
 	client            control.UnaryInvoker
 	attachInfoRefresh time.Duration
@@ -222,7 +247,7 @@ func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*contr
 	req := new(control.GetAttachInfoReq)
 	req.SetSystem(sys)
 	req.AllRanks = true
-	resp, err := c.getAttachInfo(ctx, control.DefaultClient(), req)
+	resp, err := c.getAttachInfo(ctx, c.client, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", req)
 	}
