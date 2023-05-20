@@ -417,6 +417,7 @@ packaging_check:
 	          --exclude install                             \
 	          --exclude packaging                           \
 	          --exclude utils                               \
+	          --exclude .vscode                             \
 	          -bur $(PACKAGING_CHECK_DIR)/ packaging/; then \
 	    exit 1;                                             \
 	fi
