@@ -46,6 +46,8 @@ echo -e "config_opts['yum.conf'] += \"\"\"\n" >> "$cfg_file"
 
 if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
     #repo_dels+=("--disablerepo=\*")
+    # disable epel as it does not like the point releases
+    repo_dels+=("--disablerepo=epel")
 
     if [ -n "${REPO_FILE_URL:-}" ]; then
         if [ -n "$REPO_FILES_PR" ]; then
