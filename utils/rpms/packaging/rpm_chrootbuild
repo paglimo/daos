@@ -66,7 +66,7 @@ if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
             fi
         fi
         curl -sSf "$REPO_FILE_URL"daos_ci-"$DISTRO"-mock-artifactory.repo >> "$cfg_file"
-        repo_adds+=("--enablerepo *-artifactory")
+        repo_adds+=("--enablerepo *-artifactory" "--enablerepo appstream")
     fi
 fi
 
