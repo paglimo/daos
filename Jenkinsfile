@@ -536,6 +536,43 @@ pipeline {
                         }
                     }
                 }
+                stage('Build RPM on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs()
+                            args '--cap-add=SYS_ADMIN'
+                        }
+                    }
+                    steps {
+                        job_step_update(buildRpm())
+                    }
+                    post {
+                        success {
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                            job_status_update()
+                        }
+                    }
+                }
                 stage('Build RPM on Leap 15.4') {
                     when {
                         beforeAgent true
@@ -901,7 +938,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
-                /*stage('Functional on EL 9') {
+                stage('Functional on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -923,7 +960,6 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                */
                 stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true

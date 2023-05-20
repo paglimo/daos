@@ -351,7 +351,6 @@ EOF
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
     fi
-    cat /etc/os-release
 
     return 0
 }

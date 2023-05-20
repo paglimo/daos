@@ -16,7 +16,7 @@
 
 Name:          daos
 Version:       2.3.107
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.9.2-2.410.ge10bf89%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -86,7 +86,11 @@ BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
+%if (0%{?rhel} >= 9)
+BuildRequires: python-devel
+%else
 BuildRequires: python36-devel
+%endif
 BuildRequires: python3-distro
 BuildRequires: Lmod
 %else
@@ -556,6 +560,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Sat May 20 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.107-6
+- Build on EL9
+
 * Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
 - Add libcapstone-devel to deps of client-tests package
 
