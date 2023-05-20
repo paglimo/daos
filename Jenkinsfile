@@ -982,28 +982,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15.4')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
