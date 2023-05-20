@@ -224,6 +224,9 @@ pipeline {
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
+        string(name: 'CI_EL9_TARGET',
+               defaultValue: '',
+               description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
         string(name: 'CI_LEAP15_TARGET',
                defaultValue: '',
                description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
@@ -233,6 +236,9 @@ pipeline {
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
+        booleanParam(name: 'CI_RPM_el9_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build RPM packages for EL 9')
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
@@ -260,6 +266,9 @@ pipeline {
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on Leap 15 test stage' +
