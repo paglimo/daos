@@ -146,7 +146,8 @@ timeout_cmd() {
 fetch_repo_config() {
     local repo_server="$1"
 
-    local repo_file="daos_ci-${DISTRO_NAME}-$repo_server"
+    . /etc/os-release
+    local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
     if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
         return 1
