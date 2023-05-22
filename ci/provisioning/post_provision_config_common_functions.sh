@@ -183,10 +183,10 @@ rpm_test_version() {
 set_local_repo() {
     local repo_server="$1"
 
-    rm -f "$REPOS_DIR"/daos_ci-"$DISTRO_NAME".repo
-    ln "$REPOS_DIR"/daos_ci-"$DISTRO_NAME"{-"$repo_server",.repo}
-
     . /etc/os-release
+
+    rm -f "$REPOS_DIR"/daos_ci-"${ID}${VERSION_ID%%.*}".repo
+    ln "$REPOS_DIR"/daos_ci-"${ID}${VERSION_ID%%.*}"{-"$repo_server",.repo}
 
     if [ "$repo_server" = "artifactory" ] &&
        { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
