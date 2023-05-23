@@ -43,12 +43,6 @@ else
     exit 1
 fi
 
-# DO NOT LAND
-# this belongs in the test image
-if [[ $distro = el9 ]]; then
-    pkgs="$pkgs s-nail"
-fi
-
 echo "$pkgs"
 
 exit 0
