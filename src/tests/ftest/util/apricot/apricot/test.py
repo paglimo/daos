@@ -522,7 +522,7 @@ class TestWithoutServers(Test):
         self.context = DaosContext(os.path.join(self.prefix,
                                                 'lib', 'x86_64-linux-gnu'
                                                 if detect().name.lower() == 'ubuntu'
-                                                else 'lib64'))
+                                                else '../lib64'))
         self.d_log = DaosLog(self.context)
         self.test_log.daos_log = self.d_log
 
