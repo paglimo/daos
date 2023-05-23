@@ -45,9 +45,7 @@ repo_dels=()
 echo -e "config_opts['yum.conf'] += \"\"\"\n" >> "$cfg_file"
 
 if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
-    #repo_dels+=("--disablerepo=\*")
-    # disable epel as it does not like the point releases
-    repo_dels+=("--disablerepo=epel")
+    repo_dels+=("--disablerepo=\*")
 
     if [ -n "${REPO_FILE_URL:-}" ]; then
         if [ -n "$REPO_FILES_PR" ]; then
@@ -68,7 +66,7 @@ if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
             fi
         fi
         curl -sSf "$REPO_FILE_URL"daos_ci-"$DISTRO"-mock-artifactory.repo >> "$cfg_file"
-        repo_adds+=("--enablerepo *-artifactory" "--enablerepo appstream")
+        repo_adds+=("--enablerepo *-artifactory")
     fi
 fi
 
