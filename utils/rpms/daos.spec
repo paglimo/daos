@@ -515,7 +515,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files client-tests-openmpi
 %doc README.md
-%{_libdir}/libdpar_mpi.so
+# DO NOT LAND
+# commented out until somebody answers why it might not be getting built
+#%{_libdir}/libdpar_mpi.so
 
 %files server-tests
 %doc README.md
