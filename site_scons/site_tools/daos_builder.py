@@ -199,7 +199,7 @@ def _find_mpicc(env, mpi=None):
         import subprocess
         cmd = ['rpm', '-ql', 'openmpi']
         print("%s output:\n%s" % (' '.join(cmd),
-                                  subprocess.run(cmd, capture_output=True,
+                                  subprocess.run(cmd, stdout=subprocess.PIPE,
                                                  check=False).stdout.decode()))
         return False
 
