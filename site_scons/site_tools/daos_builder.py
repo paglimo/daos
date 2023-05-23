@@ -191,10 +191,13 @@ def _test_program(env, *args, **kwargs):
 
 def _find_mpicc(env, mpi=None):
     """Find mpicc"""
-    print(f"_find_mpicc(env, mpi={mpi}:")
-    _mpicc = 'mpicc' + ('.' + mpi) if mpi else ''
-    print(f"Trying to find {_mpicc}")
-    mpicc = WhereIs(_mpicc)
+    print(f"_find_mpicc(env, mpi={mpi}):")
+    for postfix in ['.' + mpi, '']:
+        _mpicc = 'mpicc' + postfix
+        print(f"Trying to find {_mpicc}")
+        mpicc = WhereIs(_mpicc)
+        if mpicc:
+            break
     if not mpicc:
         import subprocess
         cmd = ['rpm', '-ql', 'openmpi-devel']
