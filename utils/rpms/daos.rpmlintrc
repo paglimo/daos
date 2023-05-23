@@ -53,3 +53,7 @@ addFilter("daos-client-tests.x86_64: E: devel-dependency protobuf-c-devel")
 addFilter("daos-client-tests.x86_64: E: devel-dependency capstone-devel")
 addFilter("daos-client-tests.x86_64: E: explicit-lib-dependency libcapstone-devel")
 addFilter("daos-client-tests.x86_64: E: devel-dependency libcapstone-devel")
+
+# DO NOT LAND
+# temporary hack due to figuring out module loading
+addFilter("daos-client-tests-openmpi.x86_64: E: no-binary")

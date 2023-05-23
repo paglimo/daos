@@ -191,10 +191,16 @@ def _test_program(env, *args, **kwargs):
 
 def _find_mpicc(env, mpi=None):
     """Find mpicc"""
-    print("_find_mpicc(env, mpi=%s):" % (mpi,))
+    print(f"_find_mpicc(env, mpi={mpi}:")
     _mpicc = 'mpicc' + ('.' + mpi) if mpi else ''
+    print(f"Trying to find {_mpicc}")
     mpicc = WhereIs(_mpicc)
     if not mpicc:
+        import subprocess
+        cmd = ['rpm', '-ql', 'openmpi']
+        print("%s output:\n%s" % (' '.join(cmd),
+                                  subprocess.run(cmd, capture_output=True,
+                                                 check=False).stdout.decode()))
         return False
 
     env.Replace(CC=_mpicc)
