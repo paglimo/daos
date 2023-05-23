@@ -198,7 +198,7 @@ class Test(avocadoTest):
                 # first see if it's being fixed in this PR
                 try:
                     with open(os.path.join(os.sep, 'tmp',
-                                           'commit_title')) as commit_handle:
+                                           'commit_fixes')) as commit_handle:
                         if commit_handle.read().strip().startswith(
                                 ticket + " "):
                             # fix is in this PR
