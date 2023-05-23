@@ -197,7 +197,7 @@ def _find_mpicc(env, mpi=None):
     mpicc = WhereIs(_mpicc)
     if not mpicc:
         import subprocess
-        cmd = ['rpm', '-ql', 'openmpi']
+        cmd = ['rpm', '-ql', 'openmpi-devel']
         print("%s output:\n%s" % (' '.join(cmd),
                                   subprocess.run(cmd, stdout=subprocess.PIPE,
                                                  check=False).stdout.decode()))
