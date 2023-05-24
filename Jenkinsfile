@@ -1144,26 +1144,6 @@ pipeline {
                 } // stage('Fault inection testing')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8') {
-            when {
-                beforeAgent true
-                expression { params.CI_STORAGE_PREP_LABEL != '' }
-            }
-            agent {
-                label params.CI_STORAGE_PREP_LABEL
-            }
-            steps {
-                job_step_update(
-                    storagePrepTest(
-                        inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version, 'tests-internal')))
-            }
-            post {
-                cleanup {
-                    job_status_update()
-                }
-            }
-        } // stage('Test Storage Prep')
         stage('Test Hardware') {
             when {
                 beforeAgent true
