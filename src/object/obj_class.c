@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -236,7 +236,7 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 
 int
 daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-		    enum daos_obj_redun *ord, uint32_t *nr)
+		    enum daos_obj_redun *ord, uint32_t *nr, uint32_t rf_factor)
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
@@ -270,9 +270,17 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 	}
 
 	grp_size = daos_oclass_grp_size(&ca);
-	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX)
+	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX) {
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 
+		/* To honor RF setting during failure cases, let's reserve RF
+		 * groups, so if some targets fail, there will be enough replacement
+		 * targets to rebuild, so to avoid putting multiple shards in the same
+		 * domain, which may break the RF setting.
+		 */
+		if (ca.ca_grp_nr > rf_factor)
+			ca.ca_grp_nr -= rf_factor;
+	}
 	if (grp_size > domain_nr) {
 		D_ERROR("grp size (%u) (%u) is larger than domain nr (%u)\n",
 			grp_size, DAOS_OBJ_REPL_MAX, domain_nr);
@@ -823,8 +831,17 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	}
 
 	if (grp_nr == DAOS_OBJ_GRP_MAX || grp_nr * grp_size > target_nr) {
+		uint32_t max_grp = target_nr / grp_size;
+
 		/* search for the highest scalability in the allowed range */
-		*nr = max(1, (target_nr / grp_size));
+		/* To honor RF setting during failure cases, let's reserve RF
+		 * groups, so if some targets fail, there will be enough replacement
+		 * targets to rebuild, so to avoid putting multiple shards in the same
+		 * domain, which may break the RF setting.
+		 */
+		if (max_grp > rf)
+			max_grp = max_grp - rf;
+		*nr = max(1, max_grp);
 	} else {
 		*nr = grp_nr;
 	}
