@@ -25,7 +25,9 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
     fi
 
     pkgs="$prefix ndctl                \
-          fio patchutils               \
+          fio patchutils"
+    if [[ $distro != el9 ]]; then
+          pkgs="$pkgs                  \
           romio-tests                  \
           testmpio                     \
           python$pyver-mpi4py-tests    \
@@ -37,6 +39,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           simul-$openmpi               \
           MACSio-mpich                 \
           MACSio-$openmpi"
+    fi
 else
     echo "I don't know which packages should be installed for distro" \
          "\"$distro\""
