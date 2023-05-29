@@ -410,7 +410,11 @@ class Mpirun(JobManager):
         # use an update-alternatives variant if available
         exe = find_executable("mpirun." + mpi_type)
         if not exe:
-            find_executable("mpirun")
+            print(f"Could not find mpirun.{mpi_type}")
+            exe = find_executable("mpirun")
+            if not exe:
+                print("Could not find mpirun")
+                exit(1)
         path = os.path.dirname(exe)
         super().__init__("/run/mpirun/*", os.path.basename(exe), job, path, subprocess)
 
