@@ -250,7 +250,7 @@ class CoreFileProcessing():
                     dnf_args.extend(
                         ["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo", "libpmemobj",
                          "python36", "openmpi3", "gcc"])
-                elif self.is_el() and self.distro_info.version == "8":
+                elif self.is_el() and self.distro_info.version >= 8:
                     dnf_args.extend(
                         ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
                 else:
