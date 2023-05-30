@@ -203,9 +203,7 @@ Summary: The entire internal DAOS test suite
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
-%if (0%{?rhel} < 9)
 Requires: mpifileutils-mpich
-%endif
 Requires: mpich
 Requires: ior
 BuildArch: noarch
