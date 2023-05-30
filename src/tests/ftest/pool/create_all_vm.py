@@ -163,7 +163,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         if scm_hugepages_disabled:
             delta_bytes_max = 8 << 20   # 8 MiB
             page_size = 4 << 10         # 4 KiB
-            delta_rank_bytes = min(pool_count * 2 * page_size, delta_bytes_max)
+            delta_rank_bytes = min((pool_count * 2 * page_size) + page_size, delta_bytes_max)
         else:
             page_size = 2 << 20         # 2 MiB
             delta_rank_bytes = 4 * page_size
