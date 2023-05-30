@@ -1011,12 +1011,12 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
-    def update_acl(self, entry=None, acl_file=None):
-        """Update container acl by calling daos container update-acl.
+    def update_acl(self, *args, **kwargs):
+        """Call daos container update-acl.
 
         Args:
-            entry (bool, optional): Add or modify a single ACL entry
-            acl_file (str, optional): Input file containing ACL
+            args (tuple, optional): args to pass to container_update_acl
+            kwargs (dict, optional): keyword args to pass to container_update_acl
 
         Returns:
             str: JSON output of daos container update-acl.
@@ -1026,7 +1026,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         return self.daos.container_update_acl(
-            pool=self.pool.identifier, cont=self.identifier, entry=entry, acl_file=acl_file)
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
     def set_attr(self, *args, **kwargs):
         """Call daos container set-attr.

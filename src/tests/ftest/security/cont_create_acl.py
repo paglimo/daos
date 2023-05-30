@@ -44,16 +44,17 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 1. Create a pool and obtain its UUID
         self.log.info("===> Creating a pool with no ACL file passed")
-        pool_uuid = self.create_pool_with_dmg()
+        self.pool = self.get_pool()
 
         # 2. Create a container with no ACL file passed
         self.log.info("===> Creating a container with no ACL file passed")
-        self.container_uuid = self.create_container_with_daos(self.pool)
+        self.container = self.create_container_with_daos(self.pool)
+        self.container_uuid = self.container.uuid
 
-        if not self.container_uuid:
+        if not self.container:
             self.fail("    An expected container could not be created")
 
-        cont_acl = self.get_container_acl_list(pool_uuid, self.container_uuid)
+        cont_acl = self.get_container_acl_list(self.pool.identifier, self.container.identifier)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
                       Container ACL: {}\n\tExpected ACL: {}".format(cont_acl, expected_acl))
@@ -64,8 +65,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         self.log.info("===> Destroying the container")
         result = self.destroy_containers(self.container)
         if result:
-            self.fail("    Unable to destroy container '{}'".format(
-                self.container_uuid))
+            self.fail("    Unable to destroy container {}".format(str(self.container)))
         else:
             self.container_uuid = None
 
@@ -75,13 +75,14 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 4. Create a container with a valid ACL file passed
         self.log.info("===> Creating a container with an ACL file passed")
-        self.container_uuid = self.create_container_with_daos(
-            self.pool, "valid")
+        self.container = self.create_container_with_daos(self.pool, "valid")
+        self.container_uuid = self.container.uuid
 
-        if not self.container_uuid:
+        if not self.container:
             self.fail("    An expected container could not be created")
 
-        cont_acl = self.get_container_acl_list(pool_uuid, self.container_uuid, True)
+        cont_acl = self.get_container_acl_list(
+            self.pool.identifier, self.container.identifier, True)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
                       Container ACL: {}\n\tExpected ACL:  {}".format(cont_acl, expected_acl))
@@ -92,8 +93,7 @@ class CreateContainterACLTest(ContSecurityTestBase):
         self.log.info("===> Destroying the container")
         result = self.destroy_containers(self.container)
         if result:
-            self.fail("    Unable to destroy container '{}'".format(
-                self.container_uuid))
+            self.fail("    Unable to destroy container {}".format(str(self.container)))
         else:
             self.container_uuid = None
 
@@ -103,13 +103,13 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 6. Create a container with an invalid ACL file passed
         self.log.info("===> Creating a container with invalid ACL file passed")
-        self.container_uuid = self.create_container_with_daos(
-            self.pool, "invalid")
+        self.container = self.create_container_with_daos(self.pool, "invalid")
+        self.container_uuid = self.container.uuid
 
-        if self.container_uuid:
+        if self.container:
             self.fail(
-                "    Did not expect the container '{}' to be created".format(
-                    self.container_uuid))
+                "    Did not expect the container {} to be created".format(
+                    str(self.container)))
 
         # 7. Cleanup environment
         self.log.info("===> Cleaning the environment")

@@ -8,12 +8,10 @@ import pwd
 import grp
 import re
 
-from avocado import fail_on
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from exception_utils import CommandFailure
 import general_utils
 from general_utils import DaosTestError
 import security_test_base as secTestBase
@@ -52,20 +50,6 @@ class ContSecurityTestBase(TestWithServers):
         self.dmg = self.get_dmg_command()
         self.daos_tool = DaosCommand(self.bin)
 
-    @fail_on(CommandFailure)
-    def create_pool_with_dmg(self):
-        """Create a pool with the dmg tool.
-
-        Obtains the pool uuid from the operation's result
-
-        Returns:
-            pool_uuid (str): Pool UUID, randomly generated.
-        """
-        self.prepare_pool()
-        pool_uuid = self.pool.pool.get_uuid_str()
-
-        return pool_uuid
-
     def create_container_with_daos(self, pool, acl_type=None, acl_file=None):
         """Create a container with the daos tool.
 
@@ -76,7 +60,7 @@ class ContSecurityTestBase(TestWithServers):
             acl_type (str, optional): valid or invalid.
 
         Returns:
-            container_uuid: Container UUID created.
+            TestContainer: the new container
 
         """
         file_name = None
@@ -96,24 +80,20 @@ class ContSecurityTestBase(TestWithServers):
             file_name = acl_file
 
         try:
-            self.container = self.get_container(pool, create=False, daos_command=self.daos_tool)
-            self.container.create(acl_file=file_name)
-            container_uuid = self.container.uuid
+            container = self.get_container(pool, create=False, daos_command=self.daos_tool)
+            container.create(acl_file=file_name)
+            return container
         except TestFail as error:
             if acl_type != "invalid":
-                raise DaosTestError(
-                    "Could not create expected container ") from error
-            container_uuid = None
+                raise DaosTestError("Could not create expected container ") from error
+        return None
 
-        return container_uuid
-
-    def get_container_acl_list(self, pool_uuid, container_uuid,
-                               verbose=False, outfile=None):
+    def get_container_acl_list(self, pool, container, verbose=False, outfile=None):
         """Get daos container acl list by daos container get-acl.
 
         Args:
-            pool_uuid (str): Pool uuid.
-            container_uuid (str): Container uuid.
+            pool (str): Pool label or UUID.
+            container (str): Container label or UUID.
             verbose (bool, optional): Verbose mode.
             outfile (str, optional): Write ACL to file
 
@@ -121,17 +101,7 @@ class ContSecurityTestBase(TestWithServers):
             cont_permission_list: daos container acl list.
 
         """
-        if not general_utils.check_uuid_format(pool_uuid):
-            self.fail(
-                "    Invalid Pool UUID '{}' provided.".format(pool_uuid))
-
-        if not general_utils.check_uuid_format(container_uuid):
-            self.fail(
-                "    Invalid Container UUID '{}' provided.".format(
-                    container_uuid))
-
-        result = self.daos_tool.container_get_acl(pool_uuid, container_uuid,
-                                                  verbose, outfile)
+        result = self.daos_tool.container_get_acl(pool, container, verbose, outfile)
 
         cont_permission_list = []
         for line in result.stdout_text.splitlines():
@@ -147,20 +117,6 @@ class ContSecurityTestBase(TestWithServers):
                     cont_permission_list.append(line)
         return cont_permission_list
 
-    def overwrite_container_acl(self, acl_file):
-        """Overwrite existing container acl-entries with acl_file.
-
-        Args:
-            acl_file (str): acl filename.
-
-        Return:
-            result (str): daos_tool.container_overwrite_acl.
-        """
-        self.daos_tool.exit_status_exception = False
-        result = self.daos_tool.container_overwrite_acl(
-            self.pool.uuid, self.container_uuid, acl_file)
-        return result
-
     def update_container_acl(self, entry):
         """Update container acl entry.
 
@@ -174,55 +130,6 @@ class ContSecurityTestBase(TestWithServers):
         result = self.daos_tool.container_update_acl(
             self.pool.uuid, self.container_uuid, entry=entry)
         return result
-
-    def destroy_test_container(self, pool, container):
-        """Test container destroy/delete.
-
-        Args:
-            pool (str): pool label or UUID.
-            container (str): container label or UUID.
-
-        Return:
-            result (str): daos_tool.container_destroy result.
-        """
-        self.daos_tool.exit_status_exception = False
-        return self.daos_tool.container_destroy(pool, container, True)
-
-    def set_container_attribute(
-            self, pool_uuid, container_uuid, attr, value):
-        """Write/Set container attribute.
-
-        Args:
-            pool_uuid (str): pool uuid.
-            container_uuid (str): container uuid.
-            attr (str): container attribute.
-            value (str): container attribute value to be set.
-
-        Return:
-            result (str): daos_tool.container_set_attr result.
-        """
-        self.daos_tool.exit_status_exception = False
-        result = self.daos_tool.container_set_attr(
-            pool_uuid, container_uuid, attrs={attr: value})
-        return result
-
-    def get_container_attribute(
-            self, pool_uuid, container_uuid, attr):
-        """Get container attribute.
-
-        Args:
-            pool_uuid (str): pool uuid.
-            container_uuid (str): container uuid.
-            attr (str): container attribute.
-
-        Return:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-        """
-        self.daos_tool.exit_status_exception = False
-        self.daos_tool.container_get_attr(
-            pool_uuid, container_uuid, attr)
-        return self.daos_tool.result
 
     def list_container_attribute(
             self, pool_uuid, container_uuid):

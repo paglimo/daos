@@ -146,21 +146,22 @@ class PoolSecurityTestBase(TestWithServers):
                 " =Test Passed on verify_daos_pool %s expected error of %s.\n",
                 action, expect)
 
-    def verify_cont_rw_attribute(self, action, expect, attribute, value=None):
+    def verify_cont_rw_attribute(self, container, action, expect, attribute, value=None):
         """verify container rw attribute.
 
         Args:
+            container (TestContainer): container to verify.
             action (str): daos pool read or write.
             expect (str): expecting pass or deny.
             attribute (str): Container attribute to be verified.
             value (str optional): Container attribute value to write.
         """
         if action.lower() == "write":
-            result = self.set_container_attribute(
-                self.pool.uuid, self.container_uuid, attribute, value)
+            with container.daos.temp_exit_status_exception(False):
+                result = container.set_attr(attrs={attribute: value})
         elif action.lower() == "read":
-            result = self.get_container_attribute(
-                self.pool.uuid, self.container_uuid, attribute)
+            with container.daos.temp_exit_status_exception(False):
+                result = container.get_attr(attrs={attribute: value})
         else:
             self.fail(
                 "##In verify_cont_rw_attribute, "
@@ -211,19 +212,21 @@ class PoolSecurityTestBase(TestWithServers):
             action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
 
-    def verify_cont_rw_acl(self, action, expect, entry=None):
+    def verify_cont_rw_acl(self, container, action, expect, entry=None):
         """verify container rw acl.
 
         Args:
+            container (TestContainer): container to verify
             action (str): daos container read or write.
             expect (str): expecting pass or deny.
             entry (str optional): New ace entry to be write.
         """
         if action.lower() == "write":
-            result = self.update_container_acl(entry)
+            with container.daos.temp_exit_status_exception(False):
+                result = container.update_acl(entry=entry)
         elif action.lower() == "read":
             result = self.get_container_acl_list(
-                self.pool.uuid, self.container_uuid)
+                container.pool.identifier, container.identifier)
         else:
             self.fail(
                 "##In verify_cont_rw_acl, invalid action: {}".format(action))
@@ -245,32 +248,29 @@ class PoolSecurityTestBase(TestWithServers):
         """
         if expect.lower() == 'pass':
             if DENY_ACCESS in result:
-                self.fail(
-                    "##Test Fail on verify_cont_test_result, expected Pass, "
-                    "but Failed.")
+                self.fail("##Test Fail on verify_cont_test_result, expected Pass, but Failed.")
             else:
-                self.log.info(
-                    " =Test Passed on verify_cont_test_result Succeed.\n")
+                self.log.info(" =Test Passed on verify_cont_test_result Succeed.\n")
         elif DENY_ACCESS not in result:
             self.fail(
-                "##Test Fail on verify_cont_test_result, expected Failure of "
-                "-1001, but Passed.")
+                "##Test Fail on verify_cont_test_result, expected Failure of -1001, but Passed.")
         else:
             self.log.info(
-                " =Test Passed on verify_cont_test_result expected error of "
-                "denial error -1001.\n")
+                " =Test Passed on verify_cont_test_result expected error of denial error -1001.\n")
 
-    def verify_cont_delete(self, expect):
+    def verify_cont_delete(self, container, expect):
         """verify container delete.
 
         Args:
+            container (TestContainer): container to verify.
             expect (str): expecting pass or deny.
         """
         action = "cont_delete"
-        result = self.destroy_test_container(self.pool.identifier, self.container.identifier)
+        with self.daos_tool.temp_exit_status_exception(False):
+            result = self.daos_tool.container_destroy(
+                container.pool.identifier, container.identifier, True)
         self.log.info(
-            "  In verify_cont_delete %s.\n =destroy_test_container() result:"
-            "\n%s", action, result)
+            "  In verify_cont_delete %s.\n =container_destroy() result:\n%s", action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
 
     def setup_container_acl_and_permission(
